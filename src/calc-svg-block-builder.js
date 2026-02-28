@@ -1,28 +1,144 @@
 /**
- * DROP-IN: build_block_svgs(index)
+ * File:
+ *  calc-svg-block-builder.js
  *
- * TEMPLATE:
- *   window.WINDOW_TYPE_A_SVG_TEXT  (string containing full SVG template)
+ * Role:
+ *  RENDERER
  *
- * INPUT:
- *   window.comboSolutions[index].build_objects  (array of block request objects)
+ * Purpose:
+ *  - Renders parametric, face-on 2D window/door/sidelite SVGs in-browser from a single template SVG string.
+ *  - Reads a “solution” object from `window.comboSolutions[index]`, iterates its `build_objects`, and produces SVG strings.
+ *  - Injects external PNG-based SVG `<pattern>` defs (wood + glass) using Webflow CDN-resolved `<img>` URLs.
+ *  - Writes results back onto the solution object as `building_block_svgs[block_pos] = "<svg...>"`.
  *
- * OUTPUT:
- *   window.comboSolutions[index].building_block_svgs  (object map)
- *     { "pos2": "<svg...>", "pos5": "<svg...>", ... }
+ * Context:
+ *  - Built as a Webflow-friendly “drop-in” script (HTML Embed) because Webflow is browser-only and not a bundler/runtime.
+ *  - Replaces a prior Node.js / filesystem-based SVG generation workflow; everything runs in the page at runtime.
+ *  - Assumes the SVG template is provided as raw text via a global (`window.WINDOW_TYPE_A_SVG_TEXT`).
  *
- * PATTERN PNG SOURCES (Webflow CDN):
- *   Put 6 <img> tags somewhere on the page with these IDs:
- *     img_rail_wood          -> rail_wood.png
- *     img_stile_wood         -> stile_wood.png
- *     img_bevel_top_wood     -> bevel_top_wood.png
- *     img_bevel_bottom_wood  -> bevel_bottom_wood.png
- *     img_bevel_side_wood    -> bevel_side_wood.png
- *     img_glass              -> glass.png
+ * Source of truth:
+ *  - Authoritative inputs:
+ *    - `window.comboSolutions[index].build_objects` (array of “block request” objects) is the sole data source for geometry.
+ *    - `window.WINDOW_TYPE_A_SVG_TEXT` (string) is the authoritative SVG template layout / IDs / grouping.
+ *    - Pattern image URLs are sourced from DOM `<img>` elements via `img.currentSrc || img.src`.
+ *  - Derived/synced state:
+ *    - Output SVG strings are derived and stored into `window.comboSolutions[index].building_block_svgs`.
+ *    - Pattern `<defs>/<pattern>/<image>` nodes are derived and injected per rendered SVG (not persisted elsewhere).
  *
- * FIX INCLUDED (your latest request):
- * - If construction === "double_door", the upstream model supplies the TOTAL combined width.
- *   We divide the INPUT width by 2 so each leaf slab is the correct size.
+ * Inputs (reads):
+ *
+ *  DOM Contract:
+ *  - Required DOM IDs (these are `<img>` element IDs; NOT inputs/wrappers/labels):
+ *    - #img_rail_wood          (PNG for rails/jamb_top/jamb_bottom/muntin_horizontal)
+ *    - #img_stile_wood         (PNG for stiles/jamb_left/jamb_right/muntin_vertical)
+ *    - #img_bevel_top_wood     (PNG for bevel top)
+ *    - #img_bevel_bottom_wood  (PNG for bevel bottom)
+ *    - #img_bevel_side_wood    (PNG for bevel left/right)
+ *    - #img_glass              (PNG for glass)
+ *  - Structural assumptions:
+ *    - These <img> elements exist in the DOM when rendering runs, and have resolvable URLs (currentSrc/src).
+ *
+ *  Data Contract:
+ *  - Required globals:
+ *    - `window.WINDOW_TYPE_A_SVG_TEXT` (string): the full SVG template text.
+ *    - `window.comboSolutions` (array): solutions array.
+ *    - `window.comboSolutions[index].build_objects` (array): block request objects.
+ *  - Required per-block fields inside each `build_objects[]` entry (as used by this file):
+ *    - block_pos (string)                 -> becomes key in `building_block_svgs`
+ *    - construction (string)              -> normalized; supports door-like + co + double_door
+ *    - width, height (number)             -> interpreted as inches unless PX_PER_INCH=1
+ *    - sr_top, sr_left, sr_bottom, sr_right (number) -> stile/rail thickness inputs (units match width/height)
+ *    - rows, cols (integer >= 1)          -> lite grid
+ *  - Required IDs inside the template SVG (must exist exactly; these are SVG element IDs):
+ *    - g#render_root
+ *    - g#glass_area
+ *    - g#bevel_prototypes
+ *    - g#muntin_prototypes
+ *    - g#sash
+ *    - g#unit
+ *    - rect#outside_boundary_sash
+ *    - rect#outside_boundary_unit
+ *    - rect#rail_top, rect#rail_bottom
+ *    - rect#stile_left, rect#stile_right
+ *    - rect#daylight_rect
+ *    - rect#jamb_top, rect#jamb_bottom, rect#jamb_left, rect#jamb_right
+ *    - rect#muntin_vertical_proto, rect#muntin_horizontal_proto
+ *    - path#bevel_top_proto (used to infer bevel thickness)
+ *      (also expected / used / hidden if present): #bevel_bottom_proto, #bevel_left_proto, #bevel_right_proto, #bevel_lite_proto
+ *
+ *  Runtime Assumptions:
+ *  - Runs in a modern browser with:
+ *    - DOMParser / XMLSerializer support.
+ *    - CSS.escape support.
+ *  - Pattern images should be loaded before rendering; helper `waitForPatternImages()` is provided.
+ *  - No Webflow “redirected input” syncing is used in this file. (No references to `w--redirected-checked`, `w-radio-input`,
+ *    `w-checkbox-input`, etc. appear in the code as currently written.)
+ *
+ * Outputs (produces):
+ *
+ *  Public API:
+ *  - `window.build_block_svgs(index)`:
+ *    - Reads `window.comboSolutions[index].build_objects`.
+ *    - Produces/returns `window.comboSolutions[index].building_block_svgs`.
+ *  - `waitForPatternImages()` (defined in-file; not attached to window explicitly) (inferred: callable within the embed scope).
+ *
+ *  DOM Mutations:
+ *  - None on the page DOM (no page elements are modified).
+ *  - All DOM manipulation is performed on an in-memory SVG document created by DOMParser per rendered SVG string.
+ *
+ *  Data Produced:
+ *  - `window.comboSolutions[index].building_block_svgs` is created if missing and populated as:
+ *    - building_block_svgs[block_pos] = "<svg ...>...</svg>" (serialized SVG string)
+ *
+ * Load Order / Dependencies:
+ *  - Must load AFTER:
+ *    - `window.WINDOW_TYPE_A_SVG_TEXT` is assigned.
+ *    - `window.comboSolutions` is available (or at least before calling `window.build_block_svgs`).
+ *    - The pattern preload <img> elements exist in the DOM and have resolved URLs.
+ *  - Does NOT auto-run rendering on load; rendering occurs only when `window.build_block_svgs(index)` is called.
+ *
+ * Side Effects:
+ *  - Network calls (fetch/polling): No (but pattern images may load via normal browser image loading outside this script).
+ *  - localStorage/cookies: No.
+ *  - Timers / intervals / requestAnimationFrame: No (except Promise-based waiting via image load events in helper).
+ *  - Event listeners added:
+ *    - `waitForPatternImages()` adds one-time `load` and `error` listeners to the six pattern <img> elements when needed.
+ *
+ * Failure Behavior:
+ *  - Missing globals / missing DOM IDs / missing template IDs:
+ *    - Throws Errors (hard-fail) with descriptive messages (e.g., “Template missing …”, “Missing <img id=…>”).
+ *  - Invalid geometry:
+ *    - Throws Errors for impossible constraints (e.g., SR sums exceed leaf dims; lite too small for bevel thickness).
+ *  - Current behavior is “fail-fast” rather than “fail-soft”.
+ *    - Intended fail-soft behavior (recommendation only; not implemented here): console.error + skip that block + continue.
+ *
+ * Rule Summary / Invariants:
+ *  - Rendering is driven ONLY by `build_objects` for the selected solution index; output is written to `building_block_svgs`.
+ *  - Template SVG IDs are treated as stable “API”; any ID/group rename in template must be reflected here.
+ *  - Patterns are NOT embedded as base64; they are referenced as external URLs resolved from Webflow CDN `<img>` elements.
+ *  - `construction` governs rotation / hiding:
+ *    - door/sidelite/co/double_door are rotated -90° at the end (render_root transform + swapped viewBox dims).
+ *    - co hides sash internals (rails/stiles/glass) and suppresses outside_boundary_sash stroke.
+ *    - door-like modes hide `jamb_left`.
+ *  - double_door behavior:
+ *    - Upstream width is treated as TOTAL combined width; per-leaf input width is divided by 2.
+ *    - Two leaves are stacked vertically in pre-rotation space with `MEETING_GAP` between them.
+ *    - Leaf2 base geometry (rails/stiles/boundary + glass) is cloned and pattern-filled explicitly.
+ *  - Boundary strokes are non-scaling (`vector-effect: non-scaling-stroke`) and use BOUNDARY_STROKE_OPACITY (default 0.25).
+ *
+ * Version Notes:
+ *  - v0: Browser-only drop-in renderer with external PNG patterns + output stored on `window.comboSolutions[index]`.
+ *  - Added pattern preloading via DOM <img> IDs to avoid hardcoded file paths under Webflow CDN.
+ *  - Added construction-based transforms:
+ *    - rotation for door/sidelite/co/double_door; co hides sash contents + suppresses sash boundary stroke.
+ *  - Added double_door support:
+ *    - leaf2 cloning for patterned base geometry + MEETING_GAP spacing,
+ *    - width-halving for upstream “total width” inputs.
+ *
+ * Clarifications needed (please answer so the doc can be 100% precise):
+ *  - File name: what do you want the canonical filename to be in the repo?
+ *  - Units: confirm `PX_PER_INCH = 96` is always correct for build_objects (inches), or whether some callers pass px already.
+ *  - “waitForPatternImages” exposure: do you want it on `window.*` as part of the public API, or keep it private?
  */
 
 // ---------------- EXECUTION CONFIG ----------------

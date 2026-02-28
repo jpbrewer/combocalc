@@ -1,18 +1,150 @@
 /**
- * FULL DROP-IN (browser):
- * - build_assembly_svg(index): builds + inserts an INLINE DOM <svg> into #explore
- * - SVG is constrained to wrapper div (fills 100% of wrapper) and preserves aspect ratio.
+ * ### File:
+ * calc-svg-block-assembler.js
  *
- * Requires:
- *   window.ASSEMBLY_TEMPLATES = [ {template, positions, ops}, ... ]
- *   window.comboSolutions = [ { assembly_template, building_block_svgs, ... }, ... ]
- *   window.build_block_svgs(index) populates comboSolutions[index].building_block_svgs
+ * ### Role:
+ * ORCHESTRATOR
  *
- * Notes:
- * - #explore MUST have an explicit height (CSS) or the SVG will collapse/behave oddly.
- *   Example CSS:  #explore { width:100%; height:400px; }
+ * ### Purpose:
+ * - Orchestrates generation of per-position “building block” SVGs and assembles them into a single combined SVG.
+ * - Uses a named assembly template (`assembly_template`) and a template “ops” sequence (place/snap/validateSnap) to compute layout.
+ * - Inserts the assembled SVG as an inline DOM `<svg>` into `div#explore`, and stores the serialized SVG on the solution object.
+ *
+ * ### Context:
+ * - Browser-only drop-in intended for Webflow pages where Node.js filesystem I/O is not available.
+ * - Loaded as a plain script (e.g., Webflow embed, CDN via jsDelivr/GitHub pages), operating on globals and existing DOM.
+ * - Keeps layout rules data-driven via `window.ASSEMBLY_TEMPLATES` to remain maintainable across Webflow structure changes.
+ *
+ * ---
+ *
+ * ### Source of truth:
+ * - Authoritative:
+ *   - `window.comboSolutions[index]` (solution object), especially:
+ *     - `solution.assembly_template` (template selection)
+ *     - `solution.building_block_svgs` (block SVG inputs produced by `build_block_svgs(index)`)
+ *   - `window.ASSEMBLY_TEMPLATES` (template definitions: positions + ordered ops)
+ *   - Each block SVG’s root `<svg>` `viewBox` (width/height) used for snap math.
+ * - Derived / computed:
+ *   - `placements` computed from template ops (x/y per pos + w/h from viewBox).
+ *   - Final assembled SVG root `viewBox` derived from placement bounds.
+ *   - `solution.assembly_svg` derived by serializing the assembled DOM SVG element.
+ *
+ * ---
+ *
+ * ### Inputs (reads):
+ *
+ * #### DOM Contract:
+ * - Required element:
+ *   - `div#explore` (wrapper where the assembled inline SVG is mounted).
+ * - Assumptions:
+ *   - `#explore` exists by the time `build_assembly_svg(index)` is called.
+ *   - `#explore` has a fixed height (guaranteed by page/CSS), enabling `width="100%"` + `height="100%"` SVG sizing.
+ * - IDs refer to:
+ *   - `#explore` is a wrapper `<div>` element ID (not a Webflow input/label ID).
+ *
+ * #### Data Contract:
+ * - Required globals:
+ *   - `window.ASSEMBLY_TEMPLATES`: Array of template objects:
+ *     - `{ template: string, positions: string[], ops: Array<Op> }`
+ *     - Op shapes used here (exact strings are significant):
+ *       - `{"op":"place","pos":"pos2","at":{"x":0,"y":0}}`
+ *       - `{"op":"snap","pos":"pos5","my":"BL","toPos":"pos2","their":"TL","offset"?:{"x":0,"y":0}}`
+ *       - `{"op":"validateSnap","pos":"pos5","my":"BR","toPos":"pos2","their":"TR","tolerance"?:number}`
+ *   - `window.comboSolutions`: Array of solution objects (index-addressable).
+ *   - `window.build_block_svgs(index)`: Function that populates `comboSolutions[index].building_block_svgs`.
+ * - Required solution fields (authoritative):
+ *   - `comboSolutions[index].assembly_template`: string matching a template `.template` in `ASSEMBLY_TEMPLATES`.
+ *   - `comboSolutions[index].building_block_svgs`: either:
+ *     - A direct position map: `{ pos2: "<svg...>", pos5: "<svg...>", ... }`, OR
+ *     - A wrapper with `.blocks`: `{ blocks: { pos2: "<svg...>", ... } }`
+ * - Block SVG contract:
+ *   - Each block is either an SVG string or an `SVGElement`.
+ *   - Root element MUST be `<svg>` with a valid `viewBox` containing numeric width/height.
+ *   - Assembler imports child nodes of each block `<svg>` into translated `<g>` groups (does NOT nest `<svg>` elements).
+ *
+ * #### Runtime Assumptions:
+ * - Called in a browser environment with DOM APIs:
+ *   - `document.createElementNS`, `DOMParser`, `XMLSerializer`
+ * - `window.ASSEMBLY_TEMPLATES`, `window.comboSolutions`, and `window.build_block_svgs` are defined before invocation.
+ * - No reliance on Webflow form “redirected” control spans/classes (not present in this file).
+ *
+ * ---
+ *
+ * ### Outputs (produces):
+ *
+ * #### Public API:
+ * - Globals/functions exposed:
+ *   - `build_assembly_svg(index)`
+ *
+ * #### DOM Mutations:
+ * - Replaces the contents of `div#explore`:
+ *   - Removes all existing children.
+ *   - Appends one inline `<svg>` element containing translated `<g data-pos="posX">` groups.
+ * - Wrapper inline styles may be set only if currently unset (as-implemented):
+ *   - `#explore.style.position = "relative"`
+ *   - `#explore.style.overflow = "hidden"`
+ *   (If you manage these via CSS, leaving them unset will preserve your CSS values.)
+ *
+ * #### Data Produced:
+ * - Writes to the solution object:
+ *   - `comboSolutions[index].assembly_svg`: serialized SVG string of the assembled DOM element.
+ * - Return value:
+ *   - `{ svgElement, svgString, placements, template }` on success.
+ *
+ * ---
+ *
+ * ### Load Order / Dependencies:
+ * - Must load AFTER (or at least execute AFTER) these are defined:
+ *   - `window.ASSEMBLY_TEMPLATES`
+ *   - `window.comboSolutions`
+ *   - `window.build_block_svgs`
+ * - Must be called AFTER the DOM contains `div#explore` (e.g., after DOMContentLoaded / Webflow initialization).
+ * - Does not auto-run on load; it runs only when `build_assembly_svg(index)` is invoked (appears to).
+ *
+ * ---
+ *
+ * ### Side Effects:
+ * - Network calls (fetch/polling): No
+ * - localStorage/cookies: No
+ * - Timers / intervals / requestAnimationFrame: No
+ * - Event listeners added: No
+ * - Console output:
+ *   - Logs `console.error("build_assembly_svg failed:", err)` on failure and rethrows.
+ *
+ * ---
+ *
+ * ### Failure Behavior:
+ * - Hard-fails (throws) if:
+ *   - Required globals are missing/malformed (`ASSEMBLY_TEMPLATES`, `comboSolutions`, `build_block_svgs`).
+ *   - `index` is out of range.
+ *   - `solution.assembly_template` missing or not found in `ASSEMBLY_TEMPLATES`.
+ *   - Template-required positions are missing from `building_block_svgs`.
+ *   - Any block SVG is not parseable / not `<svg>` / missing a valid `viewBox`.
+ *   - `div#explore` is missing.
+ *   - `validateSnap` checks exceed tolerance.
+ * - Current behavior is fail-hard (throw + console error). If a fail-soft behavior is desired later,
+ *   prefer: `console.error` + early return without DOM mutation (recommendation only; no runtime change here).
+ *
+ * ---
+ *
+ * ### Rule Summary / Invariants:
+ * - Template selection is driven ONLY by `comboSolutions[index].assembly_template` (no deduction logic).
+ * - Placement math relies ONLY on:
+ *   - Template op order
+ *   - Block `viewBox` width/height
+ * - Snap vocabulary is limited to corners: `TL`, `TR`, `BL`, `BR`.
+ * - Blocks are mounted as translated `<g>` groups; block `<svg>` tags are not nested in the output.
+ * - Output SVG is constrained to wrapper:
+ *   - `width="100%"`, `height="100%"`, `preserveAspectRatio="xMidYMid meet"`
+ *
+ * ---
+ *
+ * ### Version Notes:
+ * - v0 (inferred):
+ *   - Browser-only orchestrator: calls `build_block_svgs(index)` then assembles via data-driven templates.
+ *   - Uses `comboSolutions[index]` as the canonical solution record and writes `assembly_svg` back onto it.
+ *   - Renders the result as an inline DOM SVG inside `#explore` (not file-based, not `<img>`).
  */
-
 function build_assembly_svg(index) {
   try {
     // 1) Validate globals / index
