@@ -1,4 +1,173 @@
-
+/**
+ * File:
+ *  combo-solutions-ui.js (name inferred — confirm your actual filename)
+ *
+ * Role:
+ *  ORCHESTRATOR
+ *
+ * Purpose:
+ *  - Intercepts a Webflow form submit, posts the form payload to a request API, then polls a retrieval API until results are ready or a timeout occurs.
+ *  - Normalizes the returned solutions into a global store (window.comboSolutions) and renders a Webflow-built “solutions listing” UI from a template card.
+ *  - Manages modal open/close behavior and wires each Explore button to open the modal and invoke build_assembly_svg(index).
+ *
+ * Context:
+ *  - Runs in-browser as a single drop-in <script> embedded in Webflow (no bundler/modules).
+ *  - Exists because Webflow’s native form submission + conditional UI logic is insufficient for async “request → poll → render” workflows.
+ *  - Uses a hidden “icon registry” (Webflow Assets) to map logical icon filenames (e.g., /icons/arrangement_14_icon.png) to Webflow-hosted asset URLs.
+ *
+ * Source of truth:
+ *  - Authoritative state:
+ *    - window.comboSolutions: normalized array of solution objects used for rendering and Explore actions.
+ *    - window.job_id: numeric job id returned by request endpoint; used for polling retrieval endpoint.
+ *    - DOM dataset on Explore buttons (data-solution-index via element.dataset.solutionIndex): index pointer into window.comboSolutions.
+ *  - Derived/synced state:
+ *    - Rendered solution cards/rows are derived from window.comboSolutions[*].solution_grid.
+ *    - Icon <img src> is derived from solution.icon + ICON_MAP lookup (from #icon_registry).
+ *    - Submit button label/disabled/greyed style is derived from request/poll lifecycle.
+ *
+ * Inputs (reads):
+ *
+ *  DOM Contract:
+ *  - IDs (these are element IDs on wrappers/buttons/divs):
+ *    - #wf_form_combo            (the <form> element)
+ *    - #submit_query            (the submit button; code falls back to form querySelector if not found)
+ *    - #search_again            (“Search Again” button; click triggers resetUI)
+ *    - #solutions_area          (wrapper around the solutions UI; hidden until poll success)
+ *    - #blocker_form            (overlay “blocker” for the form; shown after poll success, hidden on reset)
+ *    - #icon_registry           (hidden container; contains <img data-icon-name="..."> entries mapping filenames → asset URLs)
+ *    - #modal-overlay           (modal overlay; display:flex to show; display:none to hide)
+ *    - #modal-panel             (modal content panel; clicks inside should not close modal)
+ *    - #modal-close             (close button; closes modal)
+ *  - Selectors / structural assumptions (inferred from code):
+ *    - .solutions-list                  (container list where solution cards are appended)
+ *    - [data-solution-card="template"]  (template “solution card” to clone per solution)
+ *    - Within each cloned card:
+ *      - [data-solution-row="template"] (template row for solution_grid positions to clone)
+ *      - [data-solution-summary="row"]  (summary row that contains [data-field="summary"])
+ *      - [data-solution-explore="btn"]  (Explore button; dynamically wired and indexed)
+ *      - [data-solution-icon="img"]     (icon wrapper; must contain <img data-field="icon">)
+ *  - ID semantics clarity:
+ *    - All IDs referenced above are element IDs on the actual DOM nodes (not label wrappers for inputs).
+ *    - This file does not read individual form input IDs; it relies on FormData(form) to collect values.
+ *
+ *  Data Contract:
+ *  - Request endpoint:
+ *    - POSTs application/x-www-form-urlencoded (URLSearchParams/FormData entries) to REQUEST_ENDPOINT_URL
+ *    - Expects a “job id” response (number or JSON containing job_id / unix / jobId or similar).
+ *  - Retrieval endpoint:
+ *    - POSTs application/x-www-form-urlencoded with { job_id }
+ *    - Returns either:
+ *      - "not_ready" (string) OR an object with status/state "not_ready" (inferred), OR
+ *      - a solutions payload (array or object containing a solutions array)
+ *  - Solutions payload (inferred from normalization/rendering):
+ *    - Each solution object may contain:
+ *      - assembly_template (string)
+ *      - assembly_no or arrangement_no (number/string)
+ *      - icon (string: filename, relative path, or absolute URL)
+ *      - solution_grid (object) containing:
+ *        - notes (string) at the top level of solution_grid
+ *        - position keys: pos2, pos13, pos4, pos56 (optional) each containing:
+ *          - row, building_block, order_dims, quantity, door_unit_width, door_unit_height
+ *      - build_object_specs (object) (new name; may fall back from build_objects)
+ *      - solution_svg (string; optional)
+ *      - meta (object; optional)
+ *  - Required external function (called on Explore click):
+ *    - window.build_assembly_svg(index) must exist for rendering; if missing, current behavior logs a warning and continues.
+ *
+ *  Runtime Assumptions:
+ *  - Runs after DOMContentLoaded; listeners are attached in init().
+ *  - Webflow’s base DOM (template elements, modal elements, form wrapper) already exists by the time DOMContentLoaded fires.
+ *  - Webflow Interactions (IX) may attach triggers via data-w-id; this script strips data-w-id from cloned content (and Explore btn) to avoid Webflow trigger errors.
+ *  - NOTE: This file does NOT appear to explicitly manage Webflow “redirected” form controls
+ *    (span.w-radio-input / span.w-checkbox-input / w--redirected-checked) — inferred absent because no such selectors/classes are referenced.
+ *
+ * Outputs (produces):
+ *
+ *  Public API:
+ *  - window.job_id              (Number; assigned after initial request)
+ *  - window.comboSolutions      (Array<Solution>; assigned after successful retrieval)
+ *  - No additional window.* functions are defined here.
+ *  - Calls (requires) window.build_assembly_svg(index) on Explore click.
+ *
+ *  DOM Mutations:
+ *  - Shows/hides:
+ *    - #solutions_area: display none → shown on success; hidden on reset/failure
+ *    - #blocker_form: display block on success; display none on reset/failure/load
+ *    - Webflow success/fail panels inside the form wrapper (.w-form-done / .w-form-fail):
+ *      - success shown on poll success; fail shown on errors (inferred behavior)
+ *  - Updates:
+ *    - Submit button text transitions + disabled state + greying on success
+ *    - Solutions list is re-rendered by:
+ *      - removing existing non-template cards
+ *      - cloning template card per solution
+ *      - cloning row template per position key in POS_ORDER
+ *      - populating [data-field="..."] nodes with solution_grid values
+ *      - setting icon <img data-field="icon"> src via ICON_MAP (or fallback resolution)
+ *    - Modal overlay display toggled by openModal/closeModal.
+ *
+ *  Data Produced:
+ *  - Normalized solution objects stored in window.comboSolutions:
+ *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta }
+ *  - ICON_MAP (internal) created from #icon_registry: filename → Webflow asset URL.
+ *
+ * Load Order / Dependencies:
+ *  - Must run after the Webflow page DOM exists (uses DOMContentLoaded).
+ *  - Must run on pages that include:
+ *    - the form (#wf_form_combo), solutions template structure, and modal structure.
+ *  - build_assembly_svg(index) should be loaded before any Explore click occurs (can load after this file).
+ *  - Icon registry (#icon_registry) must exist before init() for mapping; if missing, icons fall back to origin-relative/absolute URLs (may 404 on Webflow).
+ *  - Runs automatically on load; no explicit init call required.
+ *
+ * Side Effects:
+ *  - Network calls (fetch/polling): Yes
+ *    - POST to REQUEST_ENDPOINT_URL once per submit
+ *    - POST to RETRIEVAL_ENDPOINT_URL up to MAX_POLLS times with POLL_INTERVAL_MS delays
+ *  - localStorage/cookies: No (none present)
+ *  - Timers / intervals / requestAnimationFrame: Yes
+ *    - Uses sleep() (setTimeout via Promise) between polls; no setInterval used
+ *  - Event listeners added:
+ *    - document: click (capture) for Explore buttons
+ *    - document: keydown for Escape-to-close modal
+ *    - modal overlay: click to close when target is overlay
+ *    - modal close button: click to close
+ *    - modal panel: click stopPropagation (prevents overlay-close)
+ *    - form: submit (capture) to prevent default Webflow submit and run async flow
+ *    - search_again button: click to reset UI
+ *
+ * Failure Behavior:
+ *  - Missing DOM elements:
+ *    - Many selectors are optional; missing elements typically cause the related feature to no-op.
+ *    - Critical missing elements (solutions list/template) will throw during populateSolutionsFromStore() (inferred).
+ *  - Missing/invalid job_id response:
+ *    - Throws error “Invalid job_id returned.” and restores submit button; shows Webflow fail panel (inferred).
+ *  - Poll timeout:
+ *    - Throws “Polling timed out…”; restores submit button; shows fail panel (inferred).
+ *  - Missing build_assembly_svg:
+ *    - Explore click opens modal, then logs a warning and does not render (current behavior).
+ *  - Recommended fail-soft behavior (non-runtime change suggestion):
+ *    - Prefer console.error + return early when template/list are missing rather than throwing, if later refactoring.
+ *
+ * Rule Summary / Invariants:
+ *  - Form is always visible; submission is intercepted (preventDefault) so only this script posts.
+ *  - Solutions are only displayed after a successful poll response; #solutions_area remains hidden otherwise.
+ *  - #blocker_form must be visible only when results are present; reset hides it.
+ *  - Explore buttons must carry a valid dataset.solutionIndex pointing into window.comboSolutions.
+ *  - POS_ORDER determines row render order; absent pos keys are skipped without errors.
+ *  - Template elements are never removed; clones are appended and then cleaned on reset/new render.
+ *
+ * Version Notes:
+ *  - v0 (inferred): Implements request→poll→render pipeline with timeout.
+ *  - Adds window.comboSolutions global store (normalized) + Explore button indexing.
+ *  - Adds modal open/close controls + Explore wiring; calls build_assembly_svg(index) after opening modal.
+ *  - Adds Webflow asset icon mapping via #icon_registry to resolve logical filenames.
+ *  - Adds form blocker overlay (#blocker_form) shown on success and removed on reset.
+ *
+ * Clarifications needed (please answer):
+ *  - Confirm actual filename for the “File:” line.
+ *  - Confirm the exact key name the retrieval payload uses for the solutions array (solutions vs data vs results), or if multiple are possible.
+ *  - Confirm whether throwing when .solutions-list / template missing is acceptable, or if you want a fail-soft “log+exit” behavior in a future revision.
+ */
+ 
 (() => {
   // =========================================
   // CONFIG
