@@ -3,7 +3,7 @@
  *  calc-svg-block-builder.js
  *
  * Role:
- *  RENDERER
+ * RENDERER
  *
  * Purpose:
  *  - Renders parametric, face-on 2D window/door/sidelite SVGs in-browser from a single template SVG string.

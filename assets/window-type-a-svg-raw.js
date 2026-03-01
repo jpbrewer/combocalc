@@ -1,5 +1,111 @@
-  // Window Type A SVG template (Inkscape export)
-  // Safe to paste into Webflow embed / custom code.
+/**
+ * File:
+ *  window-type-a-svg-raw.js
+ *
+ * Role:
+ *  ASSET/DATA
+ *
+ * Purpose:
+ *  - Defines the canonical “Window Type A” SVG template as a raw string.
+ *  - Publishes that template globally as `window.WINDOW_TYPE_A_SVG_TEXT`.
+ *  - Serves as the structural contract between the Inkscape-authored drawing
+ *    and the in-browser SVG rendering engine.
+ *
+ * Context:
+ *  - Delivered via jsDelivr (GitHub-backed CDN) using a sequential script loader
+ *    embedded in Webflow.
+ *  - This file is loaded dynamically in a controlled order alongside other
+ *    calc-* modules.
+ *  - It replaces a former Node.js file-system asset pipeline and exists purely
+ *    as browser-consumable template data.
+ *
+ * Source of truth:
+ *  - Authoritative:
+ *      - The literal SVG markup contained in `window.WINDOW_TYPE_A_SVG_TEXT`.
+ *      - All element IDs and group IDs inside the SVG.
+ *  - Derived:
+ *      - All geometry resizing, bevel generation, muntin layout,
+ *        pattern application, and transforms are performed by downstream
+ *        renderer logic (e.g., calc-svg-block-builder.js).
+ *
+ * Inputs (reads):
+ *
+ *  DOM Contract:
+ *  - None.
+ *  - This file does not read or modify the page DOM.
+ *
+ *  Data Contract:
+ *  - None.
+ *  - This file defines data but does not depend on other globals.
+ *
+ *  Runtime Assumptions:
+ *  - Executed in a browser environment where `window` exists.
+ *  - Loaded before any renderer module that reads
+ *    `window.WINDOW_TYPE_A_SVG_TEXT`.
+ *
+ * Outputs (produces):
+ *
+ *  Public API:
+ *  - window.WINDOW_TYPE_A_SVG_TEXT (string)
+ *
+ *  DOM Mutations:
+ *  - None.
+ *
+ *  Data Produced:
+ *  - A single global string containing the full SVG template markup.
+ *
+ * Load Order / Dependencies:
+ *  - Must load BEFORE:
+ *      - calc-svg-block-builder.js
+ *      - calc-svg-block-assembler.js
+ *    or any module that parses the template via DOMParser.
+ *  - Loaded sequentially via jsDelivr using a custom script bootstrap.
+ *  - Has no dependency on DOMContentLoaded or Webflow initialization.
+ *
+ * Side Effects:
+ *  - Network calls: No (network handled externally by jsDelivr loader).
+ *  - localStorage/cookies: No.
+ *  - Timers / intervals: No.
+ *  - Event listeners: No.
+ *
+ * Failure Behavior:
+ *  - If this file fails to load:
+ *      - Renderer modules that expect `window.WINDOW_TYPE_A_SVG_TEXT`
+ *        will throw errors when attempting to parse it.
+ *  - If required SVG IDs/groups are renamed or removed:
+ *      - Renderer will fail-fast when querying expected IDs.
+ *
+ * Rule Summary / Invariants:
+ *  - The following SVG IDs are treated as a stable contract and must remain unchanged:
+ *      - g#render_root
+ *      - g#glass_area
+ *      - g#bevel_prototypes
+ *      - g#muntin_prototypes
+ *      - g#sash
+ *      - g#unit
+ *      - rect#outside_boundary_sash
+ *      - rect#outside_boundary_unit
+ *      - rect#rail_top
+ *      - rect#rail_bottom
+ *      - rect#stile_left
+ *      - rect#stile_right
+ *      - rect#jamb_top
+ *      - rect#jamb_bottom
+ *      - rect#jamb_left
+ *      - rect#jamb_right
+ *      - rect#daylight_rect
+ *      - rect#muntin_vertical_proto
+ *      - rect#muntin_horizontal_proto
+ *      - path#bevel_top_proto
+ *  - Prototype shapes must remain in the template even if hidden at runtime.
+ *  - All geometry is expected to exist under g#render_root so the renderer
+ *    can apply a single transform.
+ *
+ * Version Notes:
+ *  - v0: CDN-delivered template wrapper for browser-based SVG rendering.
+ *  - Structured for dynamic sequential loading via jsDelivr.
+ *  - Acts as a stable template contract for calc-svg-block-builder.js.
+ */
   window.WINDOW_TYPE_A_SVG_TEXT = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 

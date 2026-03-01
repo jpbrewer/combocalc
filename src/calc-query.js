@@ -1,6 +1,9 @@
 /**
  * File: calc-query.js
  *
+ * Role:
+ * UI GLUE
+ * 
  * Purpose:
  *  Sidecar rules engine for a Webflow-built form. Manages query/option UI state (hide/show, gating via blockers,
  *  defaults, and advanced options) using DOM IDs and input state.
