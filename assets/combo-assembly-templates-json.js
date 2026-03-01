@@ -1,7 +1,132 @@
 /**
- * Global assembly template definitions
- * Available anywhere after this script runs:
- *   window.ASSEMBLY_TEMPLATES
+ * File:
+ * combo-assembly-templates-json.js
+ *
+ * Role:
+ * ASSET/DATA
+ *
+ * Purpose:
+ * - Defines all available assembly layout templates used to combine building block SVGs.
+ * - Exposes a single global: window.ASSEMBLY_TEMPLATES.
+ * - Provides declarative layout instructions (place/snap/validateSnap) consumed by the SVG assembler.
+ *
+ * Context:
+ * - Browser-delivered via jsDelivr using the custom bootstrap loader.
+ * - Pure data file (no computation).
+ * - Must load before calc-svg-block-assembler.js executes.
+ * - Replaces earlier Node.js file-based template loading.
+ *
+ * -------------------------------------------------------------------------
+ *
+ * Source of truth:
+ * - Authoritative:
+ *   - window.ASSEMBLY_TEMPLATES array defined in this file.
+ *
+ * - Derived elsewhere:
+ *   - Layout math performed in calc-svg-block-assembler.js.
+ *   - Snap validation performed at runtime using block viewBox dimensions.
+ *
+ * -------------------------------------------------------------------------
+ *
+ * Inputs (reads):
+ *
+ * DOM Contract:
+ * - None.
+ *
+ * Data Contract:
+ * - None (standalone asset file).
+ *
+ * Runtime Assumptions:
+ * - Runs in browser global scope.
+ * - window object exists.
+ *
+ * -------------------------------------------------------------------------
+ *
+ * Outputs (produces):
+ *
+ * Public API:
+ * - window.ASSEMBLY_TEMPLATES (Array)
+ *
+ * Each template object contains:
+ *
+ *   template: string
+ *     - Unique identifier (e.g., "A", "BLHD", "GHD").
+ *     - Must match comboSolutions[index].assembly_template.
+ *
+ *   description: string
+ *     - Human-readable explanation of layout intent.
+ *
+ *   positions: string[]
+ *     - Ordered list of block position keys required by this template.
+ *     - These must exist in solution.building_block_svgs.
+ *
+ *   ops: Array of operation objects executed sequentially by assembler.
+ *
+ * Operation types:
+ *
+ *   { op: "place", pos, at:{x,y} }
+ *     - Establishes initial anchor position.
+ *
+ *   { op: "snap", pos, my, toPos, their, offset? }
+ *     - Aligns one block to another using corner anchors.
+ *
+ *   { op: "validateSnap", pos, my, toPos, their, tolerance }
+ *     - Ensures aligned edges match within tolerance.
+ *     - Current tolerance value in this file: 2.00 (SVG coordinate units).
+ *
+ * -------------------------------------------------------------------------
+ *
+ * Load Order / Dependencies:
+ * - Must load BEFORE:
+ *     calc-svg-block-assembler.js
+ *
+ * - Must load BEFORE:
+ *     Any call to build_assembly_svg(index)
+ *
+ * - No dependency on DOM readiness.
+ *
+ * -------------------------------------------------------------------------
+ *
+ * Side Effects:
+ * - Assigns global:
+ *     window.ASSEMBLY_TEMPLATES
+ *
+ * - Optional console.log for sanity check.
+ *
+ * - No:
+ *     - Network calls
+ *     - Timers
+ *     - Event listeners
+ *     - localStorage access
+ *
+ * -------------------------------------------------------------------------
+ *
+ * Failure Behavior:
+ * - If this file fails to load:
+ *     build_assembly_svg will throw:
+ *       "window.ASSEMBLY_TEMPLATES must be defined"
+ *
+ * - If a template is malformed:
+ *     Assembler may throw during execution (missing pos, invalid op, etc.).
+ *
+ * -------------------------------------------------------------------------
+ *
+ * Rule Summary / Invariants:
+ * - Template names must be unique.
+ * - Template.template string MUST match solution.assembly_template exactly.
+ * - positions array must include every pos referenced in ops.
+ * - ops are executed strictly in array order.
+ * - Snap vocabulary is limited to TL, TR, BL, BR.
+ * - validateSnap tolerance currently set to 2.00 SVG units.
+ * - This file contains zero layout math — only declarative instructions.
+ *
+ * -------------------------------------------------------------------------
+ *
+ * Version Notes:
+ * - v0 (inferred):
+ *     - Browser global asset replacing Node-based template file loading.
+ *     - Tolerance increased to 2.00 (from earlier 0.01 in development phase).
+ *     - Delivered via CDN bootstrap loader.
  */
 window.ASSEMBLY_TEMPLATES = [
   {
