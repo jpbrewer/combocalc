@@ -162,10 +162,6 @@
  *  - Adds Webflow asset icon mapping via #icon_registry to resolve logical filenames.
  *  - Adds form blocker overlay (#blocker_form) shown on success and removed on reset.
  *
- * Clarifications needed (please answer):
- *  - Confirm actual filename for the “File:” line.
- *  - Confirm the exact key name the retrieval payload uses for the solutions array (solutions vs data vs results), or if multiple are possible.
- *  - Confirm whether throwing when .solutions-list / template missing is acceptable, or if you want a fail-soft “log+exit” behavior in a future revision.
  */
  
 (() => {
