@@ -43,6 +43,11 @@ Whenever code changes affect:
 Whenever a file is created/modified in /src:
 - Ensure the required top-of-file doc block exists and remains accurate per /skills/skill-docblocks.md
 
+Whenever a new file is added to /src or /assets:
+- Add it to FILE_ORDER in calc-bootstrap-loader.js at the correct
+  position in the dependency chain.
+- Update /architecture.md (module inventory, load order).
+
 DOC UPDATE CHECKLIST (RUN AFTER ANY CHANGE)
 - If you touched /src code: verify its top-of-file doc block is accurate.
 - If you touched DOM IDs / Webflow behavior: update /webflow-contract.md.
