@@ -196,6 +196,8 @@
   const TEMPLATE_CARD_SELECTOR = '[data-solution-card="template"]';
   const LIST_SELECTOR = ".solutions-list";
   const ROW_TEMPLATE_SELECTOR = '[data-solution-row="template"]';
+  // Note: these are solution_grid display keys (for the card rows), NOT assembly template
+  // position keys (pos1–pos7). The two naming schemes serve different concerns.
   const POS_ORDER = ["pos2", "pos13", "pos4", "pos56"];
 
   // =========================================

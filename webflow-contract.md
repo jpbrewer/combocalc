@@ -162,17 +162,21 @@ Tolerance currently: `2.00` SVG coordinate units
 
 # 7) Load Order Requirements
 
-Must load in this order:
+Enforced by `calc-bootstrap-loader.js` FILE_ORDER:
 
-1.  assembly templates file\
-2.  block builder script\
-3.  assembler script\
-4.  form/query script\
-5.  call to `build_assembly_svg(index)` only after:
-    -   DOM ready
-    -   `window.comboSolutions` populated
+1.  `src/calc-query.js` — form UI rules engine
+2.  `src/calc-combo-results.js` — request/poll/render orchestrator
+3.  `assets/combo-assembly-templates-json.js` — assembly layout templates
+4.  `assets/window-type-a-svg-raw.js` — SVG template string
+5.  `src/calc-svg-block-builder.js` — parametric block renderer
+6.  `src/calc-svg-block-assembler.js` — composite SVG assembler
 
-If templates file fails to load: - Assembler will throw.
+`build_assembly_svg(index)` may only be called after:
+-   DOM ready
+-   `window.comboSolutions` populated
+-   All scripts above have loaded
+
+If any script fails to load, subsequent scripts will not load (sequential chain breaks).
 
 ------------------------------------------------------------------------
 
