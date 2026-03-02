@@ -176,6 +176,9 @@ Assets / Data:
 ## DOM Contract
 
 ### Query Form / UI Gating (`calc-query.js`)
+
+Full contract documentation in webflow-contract.md
+
 **Required IDs (inputs; these are `<input>` element IDs):**
 - Location radios: `loc_interior_radio`, `loc_exterior_radio`
 - Starting point radios: `sp_rough_radio`, `sp_drywall_radio`, `sp_co_radio`
