@@ -478,17 +478,20 @@
   }
 
   function populateModalGrid(idx) {
+    console.log("[modalGrid] called with idx:", idx);
     const sol = window.comboSolutions[idx];
     if (!sol) {
       console.warn("populateModalGrid: no solution at index", idx);
       return;
     }
+    console.log("[modalGrid] solution found, opening_width:", sol.opening_width);
 
     const panel = document.getElementById(MODAL_PANEL_ID);
-    if (!panel) return;
+    if (!panel) { console.warn("[modalGrid] EXIT: no #modal-panel"); return; }
 
     // --- Opening Summary ---
     const summaryBlock = panel.querySelector(MODAL_SUMMARY_SELECTOR);
+    console.log("[modalGrid] summaryBlock:", summaryBlock ? "FOUND" : "NOT FOUND", MODAL_SUMMARY_SELECTOR);
     if (summaryBlock) {
       setField(summaryBlock, "opening_width",  sol.opening_width);
       setField(summaryBlock, "opening_height", sol.opening_height);
@@ -497,7 +500,8 @@
 
     // --- Solution Grid ---
     const gridBlock = panel.querySelector(MODAL_GRID_SELECTOR);
-    if (!gridBlock) return;
+    console.log("[modalGrid] gridBlock:", gridBlock ? "FOUND" : "NOT FOUND", MODAL_GRID_SELECTOR);
+    if (!gridBlock) { console.warn("[modalGrid] EXIT: no grid block"); return; }
 
     // Icon
     setModalIcon(panel, sol.icon);
@@ -506,7 +510,8 @@
     gridBlock.querySelectorAll("[data-pos]").forEach(r => r.remove());
 
     const rowTemplate = gridBlock.querySelector(MODAL_ROW_SELECTOR);
-    if (!rowTemplate) return;
+    console.log("[modalGrid] rowTemplate:", rowTemplate ? "FOUND" : "NOT FOUND", MODAL_ROW_SELECTOR);
+    if (!rowTemplate) { console.warn("[modalGrid] EXIT: no row template"); return; }
 
     rowTemplate.style.display = "none";
     const notesRow = gridBlock.querySelector(MODAL_NOTES_SELECTOR);
