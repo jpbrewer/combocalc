@@ -507,7 +507,7 @@
       icon: sol.icon ?? null,
       solution_grid: sol.solution_grid ?? {},
 
-      build_objects: sol.build_objects ?? {},
+      build_objects: sol.build_objects ?? [],
 
       solution_svg: sol.solution_svg ?? null,
 
