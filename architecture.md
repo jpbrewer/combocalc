@@ -125,6 +125,9 @@ Assets / Data:
     - `build_objects` (object in normalizer; later expected as array by renderer — see “Conflicts / Drift”)
     - `solution_svg` (string or null)
     - `meta` (object)
+    - `opening_width` (number or null; from response root or per-solution)
+    - `opening_height` (number or null; from response root or per-solution)
+    - `jamb_depth` (number or null; from response root or per-solution)
 - **Source of truth:** Populated from retrieval endpoint response; then becomes authoritative for rendering and Explore.
 - **Created by:** `calc-combo-results.js` after poll success.
 - **Consumed by:**
@@ -227,6 +230,14 @@ Full contract documentation in webflow-contract.md
 **Icon registry mapping:**
 - `#icon_registry` should contain `img[data-icon-name]` elements mapping logical icon filenames to Webflow-hosted asset URLs.
 
+**Modal data grid (inside `#modal-panel`, after `#explore`):**
+- `[data-modal-summary="section"]` — opening summary (opening_width, opening_height, jamb_depth)
+- `[data-modal-grid="section"]` — grid container (icon, rows, notes, configure button)
+- `[data-modal-icon="img"]` — icon wrapper (contains `<img data-field="icon">`)
+- `[data-modal-row="template"]` — row template (cloned per position key)
+- `[data-modal-notes="row"]` — notes row
+- `[data-modal-configure="btn"]` — "Configure and Buy" button (not wired by JS)
+
 ### Explore Output Mount (`calc-svg-block-assembler.js`)
 **Required element:**
 - `div#explore` (wrapper where assembled inline SVG is mounted)
@@ -274,6 +285,13 @@ Full contract documentation in webflow-contract.md
    - It opens the modal (`#modal-overlay` display = `flex`) and reads `dataset.solutionIndex`.
    - If `window.build_assembly_svg` is missing, it warns and stops.
    - If present, it calls `window.build_assembly_svg(index)` and logs errors if thrown.
+   - After SVG rendering, calls `populateModalGrid(index)` to populate the modal data grid:
+     - Sets opening summary fields (opening_width, opening_height, jamb_depth) from the solution object.
+     - Sets icon via `[data-modal-icon="img"]` using the same icon registry resolution.
+     - Clones `[data-modal-row="template"]` per position key in `POS_ORDER`, populates `data-field` elements.
+     - Populates notes in `[data-modal-notes="row"]`.
+     - Fails gracefully (warns) if modal grid template elements are absent.
+   - On close, cloned modal grid rows (`[data-pos]` elements) are removed to prevent stale data.
    - Modal close paths:
      - click `#modal-close`
      - click overlay background (target === overlay)
