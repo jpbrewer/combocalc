@@ -606,7 +606,7 @@ function appendDimensionAnnotations(root, bounds, widthIn, heightIn) {
   var fontSize = maxDim * 0.028;
   var gap      = maxDim * 0.036;
   var textPad  = maxDim * 0.012;
-  var hTextPad = textPad + maxDim * 0.008;
+  var hTextPad = textPad + maxDim * 0.0094;
 
   var topMargin  = gap + strokeW + textPad + fontSize * 1.2;
   var leftMargin = gap + strokeW + hTextPad + fontSize * 3;
