@@ -210,16 +210,15 @@ function build_assembly_svg(index, muntins) {
 
     // 2a) If cached assembly SVG exists, mount it directly and return
     if (solution[assemblyCacheKey]) {
-      var explore = document.getElementById("explore");
-      if (!explore) throw new Error('build_assembly_svg: could not find div#explore');
-      if (!explore.style.position) explore.style.position = "relative";
-      if (!explore.style.overflow) explore.style.overflow = "hidden";
-      while (explore.firstChild) explore.removeChild(explore.firstChild);
+      const cachedExplore = document.getElementById("explore");
+      if (!cachedExplore) throw new Error('build_assembly_svg: could not find div#explore');
+      if (!cachedExplore.style.position) cachedExplore.style.position = "relative";
+      if (!cachedExplore.style.overflow) cachedExplore.style.overflow = "hidden";
+      while (cachedExplore.firstChild) cachedExplore.removeChild(cachedExplore.firstChild);
 
-      var parser = new DOMParser();
-      var cachedDoc = parser.parseFromString(solution[assemblyCacheKey], "image/svg+xml");
-      var cachedSvg = document.importNode(cachedDoc.documentElement, true);
-      explore.appendChild(cachedSvg);
+      const cachedDoc = new DOMParser().parseFromString(solution[assemblyCacheKey], "image/svg+xml");
+      const cachedSvg = document.importNode(cachedDoc.documentElement, true);
+      cachedExplore.appendChild(cachedSvg);
 
       return { svgElement: cachedSvg, svgString: solution[assemblyCacheKey], placements: null, template: null };
     }
