@@ -76,17 +76,20 @@ Script delivery is designed for CDN hosting (jsDelivr GitHub-backed) and uses a 
                 v
 ┌────────────────────────────────────────────────────────────────────┐
 │ SVG Generation Pipeline                                            │
-│  window.build_assembly_svg(index) (global function)                │
-│   ├─ calls window.build_block_svgs(index)                           │
-│   │    calc-svg-block-builder.js (RENDERER)                         │
+│  window.build_assembly_svg(index, muntins) (global function)         │
+│   ├─ muntins param: false=no muntins (rows/cols=1), true=actual      │
+│   │  (default true if omitted; Explore click passes false)           │
+│   ├─ checks assembly SVG cache first (instant swap on toggle)        │
+│   ├─ calls window.build_block_svgs(index, muntins)                   │
+│   │    calc-svg-block-builder.js (RENDERER)                          │
 │   │     - uses window.WINDOW_TYPE_A_SVG_TEXT                         │
 │   │     - uses pattern <img> URLs (#img_* ids)                       │
-│   │     - writes solution.building_block_svgs[pos] = "<svg...>"      │
+│   │     - dual cache: building_block_svgs / building_block_svgs_no_muntins │
 │   └─ assembles blocks via template ops                               │
-│        calc-svg-block-assembler.js (ORCHESTRATOR)                   │
+│        calc-svg-block-assembler.js (ORCHESTRATOR)                    │
 │         - uses window.ASSEMBLY_TEMPLATES                             │
 │         - mounts final inline <svg> into div#explore                 │
-│         - writes solution.assembly_svg (serialized)                  │
+│         - dual cache: assembly_svg / assembly_svg_no_muntins         │
 └────────────────────────────────────────────────────────────────────┘
 
 Assets / Data:
@@ -128,6 +131,11 @@ Assets / Data:
     - `opening_width` (number or null; from response root or per-solution)
     - `opening_height` (number or null; from response root or per-solution)
     - `jamb_depth` (number or null; from response root or per-solution)
+  - Rendering cache keys (added lazily by SVG pipeline):
+    - `building_block_svgs` (object; block SVGs with actual rows/cols — muntins on)
+    - `building_block_svgs_no_muntins` (object; block SVGs with rows=1, cols=1 — muntins off)
+    - `assembly_svg` (string; assembled SVG with muntins)
+    - `assembly_svg_no_muntins` (string; assembled SVG without muntins)
 - **Source of truth:** Populated from retrieval endpoint response; then becomes authoritative for rendering and Explore.
 - **Created by:** `calc-combo-results.js` after poll success.
 - **Consumed by:**
