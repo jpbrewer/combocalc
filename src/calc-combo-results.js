@@ -509,6 +509,7 @@
     if (!rowTemplate) return;
 
     rowTemplate.style.display = "none";
+    const rowContainer = rowTemplate.parentElement;
     const notesRow = gridBlock.querySelector(MODAL_NOTES_SELECTOR);
     const grid = sol.solution_grid || {};
 
@@ -530,10 +531,10 @@
       setField(row, "door_unit_width",  rowData.door_unit_width);
       setField(row, "door_unit_height", rowData.door_unit_height);
 
-      if (notesRow && notesRow.parentElement === gridBlock) {
-        gridBlock.insertBefore(row, notesRow);
+      if (notesRow && notesRow.parentElement === rowContainer) {
+        rowContainer.insertBefore(row, notesRow);
       } else {
-        gridBlock.appendChild(row);
+        rowContainer.appendChild(row);
       }
     });
 
