@@ -206,9 +206,20 @@
   const TEMPLATE_CARD_SELECTOR = '[data-solution-card="template"]';
   const LIST_SELECTOR = ".solutions-list";
   const ROW_TEMPLATE_SELECTOR = '[data-solution-row="template"]';
-  // Note: these are solution_grid display keys (for the card rows), NOT assembly template
-  // position keys (pos1–pos7). The two naming schemes serve different concerns.
-  const POS_ORDER = ["pos2", "pos13", "pos4", "pos56"];
+  // Display-order for solution_grid row keys.
+  // Xano may return grouped keys (pos13, pos56) or individual keys (pos1, pos3, pos5, etc.)
+  // depending on the assembly template.  List every known key so none are skipped.
+  const POS_ORDER = [
+    "pos2",   // door / cased opening (always present)
+    "pos13",  // sidelites combined
+    "pos1",   // left sidelite (when not grouped)
+    "pos3",   // right sidelite (when not grouped)
+    "pos4",   // mullion / intermediate element
+    "pos56",  // transoms combined
+    "pos5",   // transom (when not grouped)
+    "pos6",   // second transom (when not grouped)
+    "pos7",   // third tier / additional transom
+  ];
 
   // =========================================
   // GLOBALS
