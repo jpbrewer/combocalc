@@ -81,7 +81,7 @@
 (function () {
 
   const BASE =
-    "https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@claude-initialization/";
+    "https://raw.githubusercontent.com/jpbrewer/combocalc/claude-initialization/";
 
   /**
    * IMPORTANT:
