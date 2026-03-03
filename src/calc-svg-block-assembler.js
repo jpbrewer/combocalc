@@ -68,10 +68,12 @@
  *       Or:
  *         { blocks: { pos2: "<svg...>", ... } }
  *
+ * - Optional solution fields:
  *   - comboSolutions[index].unit_width  (number|null): unit width in decimal inches.
  *   - comboSolutions[index].unit_height (number|null): unit height in decimal inches.
  *     When present, dimension annotation lines and fractional-inch labels are
  *     rendered above (width) and to the left (height) of the assembled drawing.
+ *     When both are null/falsy, no annotations are drawn and viewBox is unchanged.
  *
  * - Block SVG contract:
  *   - Each block is either an SVG string or an SVGElement.
