@@ -1,2 +1,6 @@
 .DS_Store
 **/.DS_Store
+
+# Local HTTPS dev certs (mkcert)
+localhost.pem
+localhost-key.pem
