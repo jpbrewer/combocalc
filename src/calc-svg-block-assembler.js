@@ -90,7 +90,13 @@
  *
  * Public API:
  * - Global function exposed:
- *     build_assembly_svg(index)
+ *     build_assembly_svg(index, muntins)
+ *       - index (number): position in window.comboSolutions.
+ *       - muntins (boolean, optional): when false, renders with rows=1/cols=1 (no muntins).
+ *         Defaults to true (use actual rows/cols) if omitted or undefined.
+ *       - Passes muntins through to build_block_svgs(index, muntins).
+ *       - If a cached assembly SVG exists for the requested muntin state, mounts it
+ *         directly from cache (skips full render pipeline).
  *
  * DOM Mutations:
  * - Replaces the contents of div#explore:
@@ -102,12 +108,13 @@
  *     explore.style.overflow = "hidden"
  *
  * Data Produced:
- * - Writes to the solution object:
- *     comboSolutions[index].assembly_svg
- *       (serialized SVG string of the assembled DOM element)
+ * - Writes to the solution object (dual-cache for muntin toggle):
+ *     comboSolutions[index].assembly_svg           (muntins=true: actual rows/cols)
+ *     comboSolutions[index].assembly_svg_no_muntins (muntins=false: rows=1, cols=1)
  *
  * - Return value:
  *     { svgElement, svgString, placements, template }
+ *     (placements and template are null when returned from cache)
  *
  * -------------------------------------------------------------------------
  *
@@ -179,7 +186,7 @@
  *     - Writes assembly_svg back onto the solution object.
  *     - Renders result as inline DOM SVG inside #explore.
  */
-function build_assembly_svg(index) {
+function build_assembly_svg(index, muntins) {
   try {
     // 1) Validate globals / index
     if (!window.comboSolutions || !Array.isArray(window.comboSolutions)) {
@@ -195,10 +202,30 @@ function build_assembly_svg(index) {
       throw new Error("build_assembly_svg: build_block_svgs(index) must exist as a function");
     }
 
+    var useMuntins = (muntins !== false);
+    var assemblyCacheKey = useMuntins ? "assembly_svg" : "assembly_svg_no_muntins";
+    var blockCacheKey = useMuntins ? "building_block_svgs" : "building_block_svgs_no_muntins";
+
     const solution = window.comboSolutions[index];
 
-    // 2) Build blocks first (your helper fills building_block_svgs)
-    window.build_block_svgs(index);
+    // 2a) If cached assembly SVG exists, mount it directly and return
+    if (solution[assemblyCacheKey]) {
+      var explore = document.getElementById("explore");
+      if (!explore) throw new Error('build_assembly_svg: could not find div#explore');
+      if (!explore.style.position) explore.style.position = "relative";
+      if (!explore.style.overflow) explore.style.overflow = "hidden";
+      while (explore.firstChild) explore.removeChild(explore.firstChild);
+
+      var parser = new DOMParser();
+      var cachedDoc = parser.parseFromString(solution[assemblyCacheKey], "image/svg+xml");
+      var cachedSvg = document.importNode(cachedDoc.documentElement, true);
+      explore.appendChild(cachedSvg);
+
+      return { svgElement: cachedSvg, svgString: solution[assemblyCacheKey], placements: null, template: null };
+    }
+
+    // 2b) Build blocks first (your helper fills building_block_svgs)
+    window.build_block_svgs(index, muntins);
 
     // 3) Template key is on the parent solution object
     const templateKey = solution.assembly_template;
@@ -212,7 +239,7 @@ function build_assembly_svg(index) {
     }
 
     // 4) Get blocks map (either direct map or {blocks:{...}})
-    const bbs = solution.building_block_svgs;
+    const bbs = solution[blockCacheKey];
     if (!bbs || typeof bbs !== "object") {
       throw new Error("build_assembly_svg: comboSolutions[index].building_block_svgs was not created by build_block_svgs()");
     }
@@ -353,7 +380,7 @@ function build_assembly_svg(index) {
 
     // 9) Store serialized SVG string on the solution object
     const svgString = new XMLSerializer().serializeToString(root);
-    solution.assembly_svg = svgString;
+    solution[assemblyCacheKey] = svgString;
 
     // 10) INSERT INLINE SVG into #explore (DOM element insertion)
     const explore = document.getElementById("explore");

@@ -238,6 +238,8 @@ Removing fixed height from `#explore` will break layout scaling.
 | `modal-overlay` | `div`        | Full-screen modal backdrop; `display:flex` = open             | `calc-combo-results.js` | Modal cannot open; Explore silently fails to show  |
 | `modal-panel`   | `div`        | Modal content panel; clicks here do not close modal           | `calc-combo-results.js` | Click-propagation guard absent; overlay-click closes modal unexpectedly |
 | `modal-close`   | `div`        | Close button for modal                                         | `calc-combo-results.js` | No close button; user must use ESC or click overlay |
+| `no-muntin`     | `div`        | Muntin toggle "off" button; default active (class `muntin-selection-active`) | `calc-combo-results.js` | Toggle not bound; default no-muntin render still works |
+| `yes-muntin`    | `div`        | Muntin toggle "on" button; shows actual rows/cols muntins      | `calc-combo-results.js` | Toggle not bound; user cannot switch to muntin view |
 
 ## Modal data grid elements (inside `#modal-panel`, after `#explore`)
 

@@ -38,6 +38,8 @@
  *    - #modal-overlay           (modal overlay; display:flex to show; display:none to hide)
  *    - #modal-panel             (modal content panel; clicks inside should not close modal)
  *    - #modal-close             (close button; closes modal)
+ *    - #no-muntin              (text block; muntin toggle "off" — default active on modal open)
+ *    - #yes-muntin             (text block; muntin toggle "on" — shows actual rows/cols muntins)
  *  - Selectors / structural assumptions (inferred from code):
  *    - .solutions-list                  (container list where solution cards are appended)
  *    - [data-solution-card=”template”]  (template “solution card” to clone per solution)
@@ -97,7 +99,9 @@
  *  - window.job_id              (Number; assigned after initial request)
  *  - window.comboSolutions      (Array<Solution>; assigned after successful retrieval)
  *  - No additional window.* functions are defined here.
- *  - Calls (requires) window.build_assembly_svg(index) on Explore click.
+ *  - Calls (requires) window.build_assembly_svg(index, muntins) on Explore click (muntins=false by default).
+ *  - Muntin toggle: #no-muntin / #yes-muntin click handlers call build_assembly_svg with muntins false/true.
+ *    CSS class "muntin-selection-active" is toggled on the active button.
  *
  *  DOM Mutations:
  *  - Shows/hides:
@@ -195,6 +199,12 @@
   const MODAL_OVERLAY_ID = "modal-overlay";
   const MODAL_PANEL_ID = "modal-panel";
   const MODAL_CLOSE_ID = "modal-close";
+  const NO_MUNTIN_ID = "no-muntin";
+  const YES_MUNTIN_ID = "yes-muntin";
+  const MUNTIN_ACTIVE_CLASS = "muntin-selection-active";
+
+  var currentModalIndex = null;
+  var currentMuntinState = false;
 
   const REQUEST_ENDPOINT_URL =
     "https://api.transomsdirect.com/api:xyi0dc0X/bc_combo_solution_request";
@@ -371,6 +381,8 @@
     const overlay = document.getElementById(MODAL_OVERLAY_ID);
     if (overlay) overlay.style.display = "none";
     clearModalGridRows();
+    currentModalIndex = null;
+    currentMuntinState = false;
   }
 
   function initModalBehavior() {
@@ -396,12 +408,17 @@
         console.warn("Explore button missing/invalid data-solution-index.", exploreBtn);
         return;
       }
+
+      // Track which solution is in the modal and reset muntin toggle
+      currentModalIndex = idx;
+      setMuntinToggleState(false);
+
       if (typeof window.build_assembly_svg !== "function") {
         console.warn("build_assembly_svg(index) is not defined yet.");
         return;
       }
       try {
-        window.build_assembly_svg(idx);
+        window.build_assembly_svg(idx, false);
       } catch (err) {
         console.error("build_assembly_svg failed:", err);
       }
@@ -436,6 +453,60 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeModal();
     });
+  }
+
+  // =========================================
+  // MUNTIN TOGGLE
+  // =========================================
+  function setMuntinToggleState(showMuntins) {
+    currentMuntinState = showMuntins;
+    var noBtn = document.getElementById(NO_MUNTIN_ID);
+    var yesBtn = document.getElementById(YES_MUNTIN_ID);
+
+    if (noBtn) {
+      if (!showMuntins) noBtn.classList.add(MUNTIN_ACTIVE_CLASS);
+      else noBtn.classList.remove(MUNTIN_ACTIVE_CLASS);
+    }
+    if (yesBtn) {
+      if (showMuntins) yesBtn.classList.add(MUNTIN_ACTIVE_CLASS);
+      else yesBtn.classList.remove(MUNTIN_ACTIVE_CLASS);
+    }
+  }
+
+  function renderMuntinVersion(showMuntins) {
+    if (currentModalIndex === null) return;
+    if (typeof window.build_assembly_svg !== "function") {
+      console.warn("build_assembly_svg not available for muntin toggle.");
+      return;
+    }
+    try {
+      window.build_assembly_svg(currentModalIndex, showMuntins);
+    } catch (err) {
+      console.error("Muntin toggle render failed:", err);
+    }
+  }
+
+  function initMuntinToggle() {
+    var noBtn = document.getElementById(NO_MUNTIN_ID);
+    var yesBtn = document.getElementById(YES_MUNTIN_ID);
+
+    if (noBtn) {
+      noBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        if (!currentMuntinState) return;
+        setMuntinToggleState(false);
+        renderMuntinVersion(false);
+      });
+    }
+
+    if (yesBtn) {
+      yesBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        if (currentMuntinState) return;
+        setMuntinToggleState(true);
+        renderMuntinVersion(true);
+      });
+    }
   }
 
   // =========================================
@@ -862,6 +933,7 @@
     buildIconMapFromRegistry();
     hideSolutionsArea();
     initModalBehavior();
+    initMuntinToggle();
 
     hideFormBlocker();
 

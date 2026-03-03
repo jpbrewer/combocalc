@@ -77,9 +77,12 @@
  * Outputs (produces):
  *
  *  Public API:
- *  - `window.build_block_svgs(index)`:
+ *  - `window.build_block_svgs(index, muntins)`:
+ *    - index (number): position in window.comboSolutions.
+ *    - muntins (boolean, optional): when false, forces rows=1/cols=1 (no muntins).
+ *      Defaults to true (use actual rows/cols) if omitted or undefined.
  *    - Reads `window.comboSolutions[index].build_objects`.
- *    - Produces/returns `window.comboSolutions[index].building_block_svgs`.
+ *    - Produces/returns block SVGs in a cache slot on the solution object.
  *  - `waitForPatternImages()` (defined in-file; not attached to window explicitly) (inferred: callable within the embed scope).
  *
  *  DOM Mutations:
@@ -87,8 +90,10 @@
  *  - All DOM manipulation is performed on an in-memory SVG document created by DOMParser per rendered SVG string.
  *
  *  Data Produced:
- *  - `window.comboSolutions[index].building_block_svgs` is created if missing and populated as:
- *    - building_block_svgs[block_pos] = "<svg ...>...</svg>" (serialized SVG string)
+ *  - Cache keys on the solution object (dual-cache for muntin toggle):
+ *    - `building_block_svgs` (muntins=true): block SVGs with actual rows/cols from build_objects.
+ *    - `building_block_svgs_no_muntins` (muntins=false): block SVGs with rows=1, cols=1.
+ *  - Each cache is populated as: cache[block_pos] = "<svg ...>...</svg>" (serialized SVG string)
  *
  * Load Order / Dependencies:
  *  - Must load AFTER:
@@ -839,7 +844,7 @@ function renderOneBlockToSvgString(block, patternUrls) {
 /**
  * build_block_svgs(index)
  */
-window.build_block_svgs = function build_block_svgs(index) {
+window.build_block_svgs = function build_block_svgs(index, muntins) {
   if (!window.comboSolutions || !Array.isArray(window.comboSolutions)) {
     throw new Error("window.comboSolutions is missing or not an array.");
   }
@@ -854,20 +859,27 @@ window.build_block_svgs = function build_block_svgs(index) {
   const buildObjects = mustBeArray(solution.build_objects, "comboSolutions[index].build_objects");
   if (buildObjects.length === 0) throw new Error("comboSolutions[index].build_objects is empty.");
 
-  if (solution.building_block_svgs && Object.keys(solution.building_block_svgs).length > 0) {
-    return solution.building_block_svgs; // already rendered
+  var useMuntins = (muntins !== false);
+  var cacheKey = useMuntins ? "building_block_svgs" : "building_block_svgs_no_muntins";
+
+  if (solution[cacheKey] && Object.keys(solution[cacheKey]).length > 0) {
+    return solution[cacheKey]; // already rendered
   }
 
   const patternUrls = getPatternUrlsFromDom();
 
-  solution.building_block_svgs = {};
+  solution[cacheKey] = {};
 
   for (const block of buildObjects) {
     if (!block || typeof block !== "object") continue;
     const pos = mustStr(block.block_pos, "build_objects[].block_pos");
-    const svgString = renderOneBlockToSvgString(block, patternUrls);
-    solution.building_block_svgs[pos] = svgString;
+    var renderBlock = block;
+    if (!useMuntins) {
+      renderBlock = Object.assign({}, block, { rows: 1, cols: 1 });
+    }
+    const svgString = renderOneBlockToSvgString(renderBlock, patternUrls);
+    solution[cacheKey][pos] = svgString;
   }
 
-  return solution.building_block_svgs;
+  return solution[cacheKey];
 };
