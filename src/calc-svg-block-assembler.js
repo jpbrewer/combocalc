@@ -604,11 +604,12 @@ function appendDimensionAnnotations(root, bounds, widthIn, heightIn) {
   var strokeW  = maxDim * 0.003;
   var arrowLen = maxDim * 0.012;
   var fontSize = maxDim * 0.028;
-  var gap      = maxDim * 0.018;
+  var gap      = maxDim * 0.036;
   var textPad  = maxDim * 0.012;
+  var hTextPad = textPad + maxDim * 0.008;
 
   var topMargin  = gap + strokeW + textPad + fontSize * 1.2;
-  var leftMargin = gap + strokeW + textPad + fontSize * 3;
+  var leftMargin = gap + strokeW + hTextPad + fontSize * 3;
 
   var color = "#333333";
   var g = document.createElementNS(SVG_NS, "g");
@@ -655,7 +656,7 @@ function appendDimensionAnnotations(root, bounds, widthIn, heightIn) {
     dimLine(g, lineX, y2, lineX + arrowLen, y2 - arrowLen, strokeW, color);
 
     // Label centered, rotated -90deg
-    var textCX = lineX - textPad;
+    var textCX = lineX - hTextPad;
     var textCY = bounds.minY + bounds.h / 2;
     dimTextRotated(g, textCX, textCY, dimToFraction(heightIn), fontSize, color);
   }
