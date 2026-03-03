@@ -81,7 +81,7 @@
 (function () {
 
   const BASE =
-    "https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@muntins-on-off/";
+    "https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@main/";
 
   /**
    * IMPORTANT:
