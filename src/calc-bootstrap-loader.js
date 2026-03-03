@@ -81,7 +81,7 @@
 (function () {
 
   const BASE =
-    "https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@main/";
+    "https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@unit-dims/";
 
   /**
    * IMPORTANT:

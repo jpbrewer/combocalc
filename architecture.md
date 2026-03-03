@@ -109,7 +109,7 @@ Assets / Data:
 | `combo-assembly-templates-json.js` | ASSET/DATA | On load | `window.ASSEMBLY_TEMPLATES` | None | Global data array | Must load before `calc-svg-block-assembler.js` and before any `build_assembly_svg` call |
 | `window-type-a-svg-raw.js` | ASSET/DATA | On load | `window.WINDOW_TYPE_A_SVG_TEXT` | None | Global string | Must load before `calc-svg-block-builder.js` (renderer) |
 | `calc-svg-block-builder.js` | RENDERER | On-demand (when called) | `window.build_block_svgs(index)` | DOM: pattern `<img>` IDs; Data: `window.WINDOW_TYPE_A_SVG_TEXT`, `window.comboSolutions[index].build_objects` | Data: creates `solution.building_block_svgs[pos] = svgString` | Requires template + comboSolutions + pattern images; fail-fast on missing prerequisites |
-| `calc-svg-block-assembler.js` | ORCHESTRATOR | On-demand (when called) | `build_assembly_svg(index)` (**inferred** global function) | DOM: `div#explore`; Data: `window.ASSEMBLY_TEMPLATES`, `window.comboSolutions`, `window.build_block_svgs` | DOM: mounts inline `<svg>` into `#explore`; Data: writes `solution.assembly_svg` + returns assembled artifact bundle | Requires templates + renderer + solution store; fail-fast (throws) on issues |
+| `calc-svg-block-assembler.js` | ORCHESTRATOR | On-demand (when called) | `build_assembly_svg(index, muntins)` (**inferred** global function) | DOM: `div#explore`; Data: `window.ASSEMBLY_TEMPLATES`, `window.comboSolutions`, `window.build_block_svgs` | DOM: mounts inline `<svg>` into `#explore` (with optional dimension annotations when `unit_width`/`unit_height` present); Data: writes `solution.assembly_svg` + returns assembled artifact bundle | Requires templates + renderer + solution store; fail-fast (throws) on issues |
 
 ---
 
@@ -131,6 +131,8 @@ Assets / Data:
     - `opening_width` (number or null; from response root or per-solution)
     - `opening_height` (number or null; from response root or per-solution)
     - `jamb_depth` (number or null; from response root or per-solution)
+    - `unit_width` (number or null; decimal inches; from response root or per-solution)
+    - `unit_height` (number or null; decimal inches; from response root or per-solution)
   - Rendering cache keys (added lazily by SVG pipeline):
     - `building_block_svgs` (object; block SVGs with actual rows/cols — muntins on)
     - `building_block_svgs_no_muntins` (object; block SVGs with rows=1, cols=1 — muntins off)
@@ -141,7 +143,7 @@ Assets / Data:
 - **Consumed by:**
   - `calc-combo-results.js` for solutions list rendering and Explore button indexing.
   - `calc-svg-block-builder.js` reads `comboSolutions[index].build_objects` and writes `comboSolutions[index].building_block_svgs`.
-  - `calc-svg-block-assembler.js` reads `comboSolutions[index].assembly_template` and `building_block_svgs`, writes `assembly_svg`.
+  - `calc-svg-block-assembler.js` reads `comboSolutions[index].assembly_template`, `building_block_svgs`, `unit_width`, and `unit_height`; writes `assembly_svg`.
 
 ### `window.job_id`
 - **Name in code:** `window.job_id`
@@ -312,6 +314,7 @@ Full contract documentation in webflow-contract.md
      - Call `window.build_block_svgs(index)` to produce `solution.building_block_svgs`
      - Select layout template from `solution.assembly_template` in `window.ASSEMBLY_TEMPLATES`
      - Parse each block SVG (expects `<svg>` + valid viewBox), compute placements via ops (`place`, `snap`, `validateSnap`)
+     - If `unit_width`/`unit_height` are present, append dimension annotation lines and fractional-inch labels; expand viewBox to accommodate
      - Mount assembled inline `<svg>` into `div#explore`
      - Serialize final SVG back into `solution.assembly_svg`
 

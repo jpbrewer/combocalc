@@ -68,6 +68,11 @@
  *       Or:
  *         { blocks: { pos2: "<svg...>", ... } }
  *
+ *   - comboSolutions[index].unit_width  (number|null): unit width in decimal inches.
+ *   - comboSolutions[index].unit_height (number|null): unit height in decimal inches.
+ *     When present, dimension annotation lines and fractional-inch labels are
+ *     rendered above (width) and to the left (height) of the assembled drawing.
+ *
  * - Block SVG contract:
  *   - Each block is either an SVG string or an SVGElement.
  *   - Root element MUST be <svg> with a valid viewBox containing numeric width/height.
@@ -102,6 +107,9 @@
  * - Replaces the contents of div#explore:
  *     - Removes all existing children.
  *     - Appends one inline <svg> element containing translated <g data-pos="posX"> groups.
+ *     - If unit_width/unit_height are present, a <g data-role="dimensions"> group is
+ *       appended with arrowed dimension lines and fractional-inch text labels.
+ *       The viewBox is expanded to accommodate the annotations.
  *
  * - Wrapper inline styles may be set only if currently unset (as implemented):
  *     explore.style.position = "relative"
@@ -349,16 +357,6 @@ function build_assembly_svg(index, muntins) {
     root.setAttributeNS(XMLNS_NS, "xmlns", SVG_NS);
     root.setAttributeNS(XMLNS_NS, "xmlns:xlink", XLINK_NS);
 
-    root.setAttribute("viewBox", `${bounds.minX} ${bounds.minY} ${bounds.w} ${bounds.h}`);
-
-    // ✅ CONSTRAIN TO WRAPPER DIV
-    root.setAttribute("width", "100%");
-    root.setAttribute("height", "100%");
-    root.setAttribute("preserveAspectRatio", "xMidYMid meet");
-    root.style.display = "block"; // removes inline baseline gap
-    root.style.maxWidth = "100%";
-    root.style.maxHeight = "100%";
-
     // 8) Append each block's children into a translated <g>
     // NOTE: We do NOT nest <svg> tags; we import each block's child nodes.
     for (const pos of Object.keys(placements)) {
@@ -376,6 +374,26 @@ function build_assembly_svg(index, muntins) {
 
       root.appendChild(g);
     }
+
+    // 8a) Append dimension annotations (width above, height to left)
+    var dimMargins = appendDimensionAnnotations(
+      root, bounds, solution.unit_width, solution.unit_height
+    );
+
+    // 8b) Set viewBox expanded by dimension margins
+    var vbX = bounds.minX - dimMargins.leftMargin;
+    var vbY = bounds.minY - dimMargins.topMargin;
+    var vbW = bounds.w + dimMargins.leftMargin;
+    var vbH = bounds.h + dimMargins.topMargin;
+    root.setAttribute("viewBox", vbX + " " + vbY + " " + vbW + " " + vbH);
+
+    // ✅ CONSTRAIN TO WRAPPER DIV
+    root.setAttribute("width", "100%");
+    root.setAttribute("height", "100%");
+    root.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    root.style.display = "block"; // removes inline baseline gap
+    root.style.maxWidth = "100%";
+    root.style.maxHeight = "100%";
 
     // 9) Store serialized SVG string on the solution object
     const svgString = new XMLSerializer().serializeToString(root);
@@ -505,4 +523,147 @@ function requirePlacement(placements, pos, msg) {
 function num(v) {
   const n = Number(v);
   return Number.isNaN(n) ? 0 : n;
+}
+
+/* ---------- DIMENSION ANNOTATION HELPERS ---------- */
+
+var DIM_FRACTION_TABLE = [
+  [1/16, "1/16"], [1/8, "1/8"], [3/16, "3/16"], [1/4, "1/4"],
+  [5/16, "5/16"], [3/8, "3/8"], [7/16, "7/16"], [1/2, "1/2"],
+  [9/16, "9/16"], [5/8, "5/8"], [11/16, "11/16"], [3/4, "3/4"],
+  [13/16, "13/16"], [7/8, "7/8"], [15/16, "15/16"],
+];
+
+/** Mirrors decimalToFraction() in calc-combo-results.js */
+function dimToFraction(val) {
+  if (val == null || val === "") return "";
+  var n = Number(val);
+  if (!Number.isFinite(n)) return String(val);
+  var whole = Math.floor(n);
+  var rem = Math.round((n - whole) * 16) / 16;
+  if (rem === 0) return whole + '\u2033';
+  if (rem >= 1) return (whole + 1) + '\u2033';
+  var frac = DIM_FRACTION_TABLE.find(function(v) { return Math.abs(v[0] - rem) < 0.001; });
+  var fracStr = frac ? frac[1] : rem.toString();
+  return whole > 0 ? whole + '-' + fracStr + '\u2033' : fracStr + '\u2033';
+}
+
+function dimLine(parent, x1, y1, x2, y2, sw, color) {
+  var line = document.createElementNS(SVG_NS, "line");
+  line.setAttribute("x1", x1);
+  line.setAttribute("y1", y1);
+  line.setAttribute("x2", x2);
+  line.setAttribute("y2", y2);
+  line.setAttribute("stroke", color);
+  line.setAttribute("stroke-width", sw);
+  line.setAttribute("stroke-linecap", "round");
+  parent.appendChild(line);
+}
+
+function dimText(parent, x, y, str, size, color) {
+  var t = document.createElementNS(SVG_NS, "text");
+  t.setAttribute("x", x);
+  t.setAttribute("y", y);
+  t.setAttribute("text-anchor", "middle");
+  t.setAttribute("dominant-baseline", "auto");
+  t.setAttribute("font-family", "system-ui, -apple-system, sans-serif");
+  t.setAttribute("font-size", size);
+  t.setAttribute("fill", color);
+  t.textContent = str;
+  parent.appendChild(t);
+}
+
+function dimTextRotated(parent, x, y, str, size, color) {
+  var t = document.createElementNS(SVG_NS, "text");
+  t.setAttribute("x", x);
+  t.setAttribute("y", y);
+  t.setAttribute("text-anchor", "middle");
+  t.setAttribute("dominant-baseline", "central");
+  t.setAttribute("font-family", "system-ui, -apple-system, sans-serif");
+  t.setAttribute("font-size", size);
+  t.setAttribute("fill", color);
+  t.setAttribute("transform", "rotate(-90," + x + "," + y + ")");
+  t.textContent = str;
+  parent.appendChild(t);
+}
+
+/**
+ * Appends width/height dimension annotation lines and labels to the
+ * assembled SVG. Returns margin amounts needed to expand the viewBox.
+ *
+ * @param {SVGElement} root       - The assembled <svg> element
+ * @param {Object}     bounds     - { minX, minY, w, h } of the drawing
+ * @param {number|null} widthIn   - Unit width in decimal inches
+ * @param {number|null} heightIn  - Unit height in decimal inches
+ * @returns {{ topMargin: number, leftMargin: number }}
+ */
+function appendDimensionAnnotations(root, bounds, widthIn, heightIn) {
+  if (!widthIn && !heightIn) return { topMargin: 0, leftMargin: 0 };
+
+  var maxDim   = Math.max(bounds.w, bounds.h);
+  var strokeW  = maxDim * 0.003;
+  var arrowLen = maxDim * 0.012;
+  var fontSize = maxDim * 0.028;
+  var gap      = maxDim * 0.018;
+  var textPad  = maxDim * 0.012;
+
+  var topMargin  = gap + strokeW + textPad + fontSize * 1.2;
+  var leftMargin = gap + strokeW + textPad + fontSize * 3;
+
+  var color = "#333333";
+  var g = document.createElementNS(SVG_NS, "g");
+  g.setAttribute("data-role", "dimensions");
+
+  // --- Width dimension (horizontal line above drawing) ---
+  if (widthIn) {
+    var lineY = bounds.minY - gap;
+    var x1 = bounds.minX;
+    var x2 = bounds.minX + bounds.w;
+
+    // Main horizontal line
+    dimLine(g, x1, lineY, x2, lineY, strokeW, color);
+
+    // Left arrowhead — outward-pointing (tip at left edge, arms go inward)
+    dimLine(g, x1, lineY, x1 + arrowLen, lineY - arrowLen, strokeW, color);
+    dimLine(g, x1, lineY, x1 + arrowLen, lineY + arrowLen, strokeW, color);
+
+    // Right arrowhead — outward-pointing (tip at right edge, arms go inward)
+    dimLine(g, x2, lineY, x2 - arrowLen, lineY - arrowLen, strokeW, color);
+    dimLine(g, x2, lineY, x2 - arrowLen, lineY + arrowLen, strokeW, color);
+
+    // Label centered above the line
+    var textX = bounds.minX + bounds.w / 2;
+    var textY = lineY - textPad;
+    dimText(g, textX, textY, dimToFraction(widthIn), fontSize, color);
+  }
+
+  // --- Height dimension (vertical line left of drawing) ---
+  if (heightIn) {
+    var lineX = bounds.minX - gap;
+    var y1 = bounds.minY;
+    var y2 = bounds.minY + bounds.h;
+
+    // Main vertical line
+    dimLine(g, lineX, y1, lineX, y2, strokeW, color);
+
+    // Top arrowhead — outward-pointing (tip at top edge, arms go downward)
+    dimLine(g, lineX, y1, lineX - arrowLen, y1 + arrowLen, strokeW, color);
+    dimLine(g, lineX, y1, lineX + arrowLen, y1 + arrowLen, strokeW, color);
+
+    // Bottom arrowhead — outward-pointing (tip at bottom edge, arms go upward)
+    dimLine(g, lineX, y2, lineX - arrowLen, y2 - arrowLen, strokeW, color);
+    dimLine(g, lineX, y2, lineX + arrowLen, y2 - arrowLen, strokeW, color);
+
+    // Label centered, rotated -90deg
+    var textCX = lineX - textPad;
+    var textCY = bounds.minY + bounds.h / 2;
+    dimTextRotated(g, textCX, textCY, dimToFraction(heightIn), fontSize, color);
+  }
+
+  root.appendChild(g);
+
+  return {
+    topMargin:  widthIn  ? topMargin  : 0,
+    leftMargin: heightIn ? leftMargin : 0
+  };
 }
