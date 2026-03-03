@@ -439,6 +439,29 @@
   }
 
   // =========================================
+  // DECIMAL → FRACTION HELPER
+  // =========================================
+  const FRACTION_TABLE = [
+    [1/16, "1/16"], [1/8, "1/8"], [3/16, "3/16"], [1/4, "1/4"],
+    [5/16, "5/16"], [3/8, "3/8"], [7/16, "7/16"], [1/2, "1/2"],
+    [9/16, "9/16"], [5/8, "5/8"], [11/16, "11/16"], [3/4, "3/4"],
+    [13/16, "13/16"], [7/8, "7/8"], [15/16, "15/16"],
+  ];
+
+  function decimalToFraction(val) {
+    if (val == null || val === "") return "";
+    const n = Number(val);
+    if (!Number.isFinite(n)) return String(val);
+    const whole = Math.floor(n);
+    const rem = Math.round((n - whole) * 16) / 16;
+    if (rem === 0) return whole + '"';
+    if (rem >= 1) return (whole + 1) + '"';
+    const frac = FRACTION_TABLE.find(([v]) => Math.abs(v - rem) < 0.001);
+    const fracStr = frac ? frac[1] : rem.toString();
+    return whole > 0 ? whole + '-' + fracStr + '"' : fracStr + '"';
+  }
+
+  // =========================================
   // MODAL DATA GRID
   // =========================================
   const MODAL_SUMMARY_SELECTOR = '[data-modal-summary="section"]';
@@ -501,9 +524,9 @@
     // --- Opening Summary ---
     const summaryBlock = panel.querySelector(MODAL_SUMMARY_SELECTOR);
     if (summaryBlock) {
-      setField(summaryBlock, "opening_width",  sol.opening_width);
-      setField(summaryBlock, "opening_height", sol.opening_height);
-      setField(summaryBlock, "jamb_depth",     sol.jamb_depth);
+      setField(summaryBlock, "opening_width",  decimalToFraction(sol.opening_width));
+      setField(summaryBlock, "opening_height", decimalToFraction(sol.opening_height));
+      setField(summaryBlock, "jamb_depth",     decimalToFraction(sol.jamb_depth));
     }
 
     // --- Solution Grid ---
