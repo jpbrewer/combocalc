@@ -395,10 +395,10 @@ Full contract documentation in webflow-contract.md
 - Use a single Webflow embed that loads `calc-bootstrap-loader.js` (the orchestrator). That file appends all other scripts into `document.head` sequentially.
 
 ### Caching/versioning strategy
-- Current loader uses raw.githack.com for testing (no caching; immediate updates after push):
-  - `BASE = "https://raw.githack.com/jpbrewer/combocalc/claude-initialization/"`
-- For production, switch BASE back to jsDelivr:
+- Current loader uses jsDelivr with:
   - `BASE = "https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@main/"`
+- For testing, switch BASE to raw.githack.com (no caching; immediate updates after push):
+  - `BASE = "https://raw.githack.com/jpbrewer/combocalc/<branch>/"`
 - Recommended approach for releases (guidance only):
   - Prefer pinned tags/commits (e.g., `@vX.Y.Z` or `@<sha>`) over `@main` to avoid unexpected production drift.
 
