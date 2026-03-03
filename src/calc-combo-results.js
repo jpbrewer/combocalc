@@ -71,6 +71,7 @@
  *  - Solutions payload (inferred from normalization/rendering):
  *    - Response root may contain:
  *      - opening_width (number), opening_height (number), jamb_depth (number)
+ *      - unit_width (number), unit_height (number) — decimal inches for dimension annotations
  *    - Each solution object may contain:
  *      - assembly_template (string)
  *      - assembly_no or arrangement_no (number/string)
@@ -83,6 +84,7 @@
  *      - solution_svg (string; optional)
  *      - meta (object; optional)
  *      - opening_width, opening_height, jamb_depth (optional; per-solution override of root values)
+ *      - unit_width, unit_height (optional; decimal inches; used for SVG dimension annotations)
  *  - Required external function (called on Explore click):
  *    - window.build_assembly_svg(index) must exist for rendering; if missing, current behavior logs a warning and continues.
  *
@@ -747,8 +749,11 @@
           opening_width:  resp.opening_width  ?? null,
           opening_height: resp.opening_height ?? null,
           jamb_depth:     resp.jamb_depth     ?? null,
+          unit_width:     resp.unit_width     ?? null,
+          unit_height:    resp.unit_height    ?? null,
         }
-      : { opening_width: null, opening_height: null, jamb_depth: null };
+      : { opening_width: null, opening_height: null, jamb_depth: null,
+          unit_width: null, unit_height: null };
 
     return arr.map((sol, idx) => ({
       index: idx,
@@ -770,6 +775,10 @@
       opening_width:  sol.opening_width  ?? rootOpening.opening_width,
       opening_height: sol.opening_height ?? rootOpening.opening_height,
       jamb_depth:     sol.jamb_depth     ?? rootOpening.jamb_depth,
+
+      // Unit dimensions for SVG dimension annotations
+      unit_width:     sol.unit_width     ?? rootOpening.unit_width,
+      unit_height:    sol.unit_height    ?? rootOpening.unit_height,
     }));
   }
 
