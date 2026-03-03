@@ -135,10 +135,6 @@
  *    - leaf2 cloning for patterned base geometry + MEETING_GAP spacing,
  *    - width-halving for upstream “total width” inputs.
  *
- * Clarifications needed (please answer so the doc can be 100% precise):
- *  - File name: what do you want the canonical filename to be in the repo?
- *  - Units: confirm `PX_PER_INCH = 96` is always correct for build_objects (inches), or whether some callers pass px already.
- *  - “waitForPatternImages” exposure: do you want it on `window.*` as part of the public API, or keep it private?
  */
 
 // ---------------- EXECUTION CONFIG ----------------

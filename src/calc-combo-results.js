@@ -40,12 +40,19 @@
  *    - #modal-close             (close button; closes modal)
  *  - Selectors / structural assumptions (inferred from code):
  *    - .solutions-list                  (container list where solution cards are appended)
- *    - [data-solution-card="template"]  (template “solution card” to clone per solution)
+ *    - [data-solution-card=”template”]  (template “solution card” to clone per solution)
  *    - Within each cloned card:
- *      - [data-solution-row="template"] (template row for solution_grid positions to clone)
- *      - [data-solution-summary="row"]  (summary row that contains [data-field="summary"])
- *      - [data-solution-explore="btn"]  (Explore button; dynamically wired and indexed)
- *      - [data-solution-icon="img"]     (icon wrapper; must contain <img data-field="icon">)
+ *      - [data-solution-row=”template”] (template row for solution_grid positions to clone)
+ *      - [data-solution-summary=”row”]  (summary row that contains [data-field=”summary”])
+ *      - [data-solution-explore=”btn”]  (Explore button; dynamically wired and indexed)
+ *      - [data-solution-icon=”img”]     (icon wrapper; must contain <img data-field=”icon”>)
+ *    - Modal data grid (inside #modal-panel, after #explore):
+ *      - [data-modal-summary=”section”] (opening summary block; contains data-field opening_width/opening_height/jamb_depth)
+ *      - [data-modal-grid=”section”]    (solution grid container)
+ *      - [data-modal-icon=”img”]        (icon wrapper; must contain <img data-field=”icon”>)
+ *      - [data-modal-row=”template”]    (row template; cloned per position key)
+ *      - [data-modal-notes=”row”]       (notes row; contains [data-field=”notes”])
+ *      - [data-modal-configure=”btn”]   (“Configure and Buy” button; not wired by this file)
  *  - ID semantics clarity:
  *    - All IDs referenced above are element IDs on the actual DOM nodes (not label wrappers for inputs).
  *    - This file does not read individual form input IDs; it relies on FormData(form) to collect values.
@@ -60,17 +67,20 @@
  *      - "not_ready" (string) OR an object with status/state "not_ready" (inferred), OR
  *      - a solutions payload (array or object containing a solutions array)
  *  - Solutions payload (inferred from normalization/rendering):
+ *    - Response root may contain:
+ *      - opening_width (number), opening_height (number), jamb_depth (number)
  *    - Each solution object may contain:
  *      - assembly_template (string)
  *      - assembly_no or arrangement_no (number/string)
  *      - icon (string: filename, relative path, or absolute URL)
  *      - solution_grid (object) containing:
  *        - notes (string) at the top level of solution_grid
- *        - position keys: pos2, pos13, pos4, pos56 (optional) each containing:
+ *        - position keys (all optional): pos2, pos1, pos3, pos13, pos5, pos4, pos6, pos46, each containing:
  *          - row, building_block, order_dims, quantity, door_unit_width, door_unit_height
  *      - build_object_specs (object) (new name; may fall back from build_objects)
  *      - solution_svg (string; optional)
  *      - meta (object; optional)
+ *      - opening_width, opening_height, jamb_depth (optional; per-solution override of root values)
  *  - Required external function (called on Explore click):
  *    - window.build_assembly_svg(index) must exist for rendering; if missing, current behavior logs a warning and continues.
  *
@@ -104,10 +114,14 @@
  *      - populating [data-field="..."] nodes with solution_grid values
  *      - setting icon <img data-field="icon"> src via ICON_MAP (or fallback resolution)
  *    - Modal overlay display toggled by openModal/closeModal.
+ *    - Modal data grid:
+ *      - populateModalGrid(idx) populates [data-modal-summary], sets icon via [data-modal-icon],
+ *        clones [data-modal-row="template"] per position key, and populates [data-modal-notes].
+ *      - closeModal() clears cloned modal grid rows ([data-pos] elements) to prevent stale data.
  *
  *  Data Produced:
  *  - Normalized solution objects stored in window.comboSolutions:
- *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta }
+ *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta, opening_width, opening_height, jamb_depth }
  *  - ICON_MAP (internal) created from #icon_registry: filename → Webflow asset URL.
  *
  * Load Order / Dependencies:
@@ -161,11 +175,8 @@
  *  - Adds modal open/close controls + Explore wiring; calls build_assembly_svg(index) after opening modal.
  *  - Adds Webflow asset icon mapping via #icon_registry to resolve logical filenames.
  *  - Adds form blocker overlay (#blocker_form) shown on success and removed on reset.
+ *  - Adds decimalToFraction() helper to format decimal inches as fractional (e.g., 60.25 → 60-1/4").
  *
- * Clarifications needed (please answer):
- *  - Confirm actual filename for the “File:” line.
- *  - Confirm the exact key name the retrieval payload uses for the solutions array (solutions vs data vs results), or if multiple are possible.
- *  - Confirm whether throwing when .solutions-list / template missing is acceptable, or if you want a fail-soft “log+exit” behavior in a future revision.
  */
  
 (() => {
@@ -196,7 +207,19 @@
   const TEMPLATE_CARD_SELECTOR = '[data-solution-card="template"]';
   const LIST_SELECTOR = ".solutions-list";
   const ROW_TEMPLATE_SELECTOR = '[data-solution-row="template"]';
-  const POS_ORDER = ["pos2", "pos13", "pos4", "pos56"];
+  // Display-order for solution_grid row keys.
+  // Xano may return grouped keys (pos13, pos46) or individual keys (pos1, pos3, etc.)
+  // depending on the assembly template.  List every known key so none are skipped.
+  const POS_ORDER = [
+    "pos2",   // door / cased opening (always present)
+    "pos1",   // left sidelite (when not grouped)
+    "pos3",   // right sidelite (when not grouped)
+    "pos13",  // sidelites combined
+    "pos5",   // transom
+    "pos4",   // mullion / intermediate element
+    "pos6",   // second transom
+    "pos46",  // transoms combined
+  ];
 
   // =========================================
   // GLOBALS
@@ -347,6 +370,7 @@
   function closeModal() {
     const overlay = document.getElementById(MODAL_OVERLAY_ID);
     if (overlay) overlay.style.display = "none";
+    clearModalGridRows();
   }
 
   function initModalBehavior() {
@@ -381,6 +405,13 @@
       } catch (err) {
         console.error("build_assembly_svg failed:", err);
       }
+
+      // Populate modal data grid (fail-soft)
+      try {
+        populateModalGrid(idx);
+      } catch (err) {
+        console.warn("populateModalGrid failed:", err);
+      }
     }, true);
 
     // CLOSE: close button
@@ -405,6 +436,146 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeModal();
     });
+  }
+
+  // =========================================
+  // DECIMAL → FRACTION HELPER
+  // =========================================
+  const FRACTION_TABLE = [
+    [1/16, "1/16"], [1/8, "1/8"], [3/16, "3/16"], [1/4, "1/4"],
+    [5/16, "5/16"], [3/8, "3/8"], [7/16, "7/16"], [1/2, "1/2"],
+    [9/16, "9/16"], [5/8, "5/8"], [11/16, "11/16"], [3/4, "3/4"],
+    [13/16, "13/16"], [7/8, "7/8"], [15/16, "15/16"],
+  ];
+
+  function decimalToFraction(val) {
+    if (val == null || val === "") return "";
+    const n = Number(val);
+    if (!Number.isFinite(n)) return String(val);
+    const whole = Math.floor(n);
+    const rem = Math.round((n - whole) * 16) / 16;
+    if (rem === 0) return whole + '"';
+    if (rem >= 1) return (whole + 1) + '"';
+    const frac = FRACTION_TABLE.find(([v]) => Math.abs(v - rem) < 0.001);
+    const fracStr = frac ? frac[1] : rem.toString();
+    return whole > 0 ? whole + '-' + fracStr + '"' : fracStr + '"';
+  }
+
+  // =========================================
+  // MODAL DATA GRID
+  // =========================================
+  const MODAL_SUMMARY_SELECTOR = '[data-modal-summary="section"]';
+  const MODAL_GRID_SELECTOR    = '[data-modal-grid="section"]';
+  const MODAL_ROW_SELECTOR     = '[data-modal-row="template"]';
+  const MODAL_NOTES_SELECTOR   = '[data-modal-notes="row"]';
+  const MODAL_ICON_SELECTOR    = '[data-modal-icon="img"]';
+
+  function setModalIcon(panel, iconPath) {
+    const wrapper = panel.querySelector(MODAL_ICON_SELECTOR);
+    if (!wrapper) return;
+
+    const img = wrapper.querySelector('[data-field="icon"]');
+    if (!img) return;
+
+    if (!iconPath) {
+      img.removeAttribute("src");
+      img.alt = "";
+      return;
+    }
+
+    const raw = String(iconPath).trim();
+    const looksAbsolute = /^https?:\/\//i.test(raw);
+
+    let resolved = raw;
+
+    if (!looksAbsolute) {
+      const filename = normalizeIconKey(raw);
+      if (ICON_MAP[filename]) {
+        resolved = ICON_MAP[filename];
+      } else {
+        resolved = new URL(raw, window.location.origin).href;
+        console.warn("Modal icon not found in registry; fallback:", resolved, "original:", raw);
+      }
+    }
+
+    img.alt = "Arrangement icon";
+    img.onerror = () => console.warn("Modal icon failed to load:", resolved, "original:", raw);
+    img.src = resolved;
+  }
+
+  function clearModalGridRows() {
+    const panel = document.getElementById(MODAL_PANEL_ID);
+    if (!panel) return;
+    const gridBlock = panel.querySelector(MODAL_GRID_SELECTOR);
+    if (!gridBlock) return;
+    gridBlock.querySelectorAll("[data-pos]").forEach(r => r.remove());
+  }
+
+  function populateModalGrid(idx) {
+    const sol = window.comboSolutions[idx];
+    if (!sol) {
+      console.warn("populateModalGrid: no solution at index", idx);
+      return;
+    }
+
+    const panel = document.getElementById(MODAL_PANEL_ID);
+    if (!panel) return;
+
+    // --- Opening Summary ---
+    const summaryBlock = panel.querySelector(MODAL_SUMMARY_SELECTOR);
+    if (summaryBlock) {
+      setField(summaryBlock, "opening_width",  decimalToFraction(sol.opening_width));
+      setField(summaryBlock, "opening_height", decimalToFraction(sol.opening_height));
+      setField(summaryBlock, "jamb_depth",     decimalToFraction(sol.jamb_depth));
+    }
+
+    // --- Solution Grid ---
+    const gridBlock = panel.querySelector(MODAL_GRID_SELECTOR);
+    if (!gridBlock) return;
+
+    // Icon
+    setModalIcon(panel, sol.icon);
+
+    // Remove previously cloned rows (keep template)
+    gridBlock.querySelectorAll("[data-pos]").forEach(r => r.remove());
+
+    const rowTemplate = gridBlock.querySelector(MODAL_ROW_SELECTOR);
+    if (!rowTemplate) return;
+
+    rowTemplate.style.display = "none";
+    const rowContainer = rowTemplate.parentElement;
+    const notesRow = gridBlock.querySelector(MODAL_NOTES_SELECTOR);
+    const grid = sol.solution_grid || {};
+
+    POS_ORDER.forEach((posKey) => {
+      const rowData = grid[posKey];
+      if (!rowData) return;
+
+      const row = rowTemplate.cloneNode(true);
+      row.style.display = "";
+      row.removeAttribute("data-modal-row");
+      row.setAttribute("data-pos", posKey);
+
+      stripWebflowInteractionIds(row);
+
+      setField(row, "row",              rowData.row);
+      setField(row, "building_block",   rowData.building_block);
+      setField(row, "order_dims",       rowData.order_dims);
+      setField(row, "quantity",         rowData.quantity);
+      setField(row, "door_unit_width",  rowData.door_unit_width);
+      setField(row, "door_unit_height", rowData.door_unit_height);
+
+      if (notesRow && notesRow.parentElement === rowContainer) {
+        rowContainer.insertBefore(row, notesRow);
+      } else {
+        rowContainer.appendChild(row);
+      }
+    });
+
+    // --- Notes ---
+    if (notesRow) {
+      setField(notesRow, "notes", grid.notes ?? "");
+    }
   }
 
   // =========================================
@@ -499,6 +670,15 @@
   function normalizeSolutions(resp) {
     const arr = extractSolutionsArray(resp);
 
+    // Opening dimensions live at response root (same for all solutions in a job)
+    const rootOpening = (resp && typeof resp === "object" && !Array.isArray(resp))
+      ? {
+          opening_width:  resp.opening_width  ?? null,
+          opening_height: resp.opening_height ?? null,
+          jamb_depth:     resp.jamb_depth     ?? null,
+        }
+      : { opening_width: null, opening_height: null, jamb_depth: null };
+
     return arr.map((sol, idx) => ({
       index: idx,
       job_id: window.job_id,
@@ -509,11 +689,16 @@
       icon: sol.icon ?? null,
       solution_grid: sol.solution_grid ?? {},
 
-      build_objects: sol.build_objects ?? {},
+      build_objects: sol.build_objects ?? [],
 
       solution_svg: sol.solution_svg ?? null,
 
-      meta: sol.meta ?? {}
+      meta: sol.meta ?? {},
+
+      // Opening dimensions (per-solution overrides root)
+      opening_width:  sol.opening_width  ?? rootOpening.opening_width,
+      opening_height: sol.opening_height ?? rootOpening.opening_height,
+      jamb_depth:     sol.jamb_depth     ?? rootOpening.jamb_depth,
     }));
   }
 

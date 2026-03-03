@@ -11,7 +11,7 @@
  *  - Acts as the single Webflow entry point for the entire system.
  *
  * Context:
- *  - Delivered via jsDelivr (GitHub-backed CDN).
+ *  - Delivered via GitHub-backed CDN (jsDelivr for production; raw.githack.com for testing).
  *  - Executed inside Webflow via a single <script> embed.
  *  - Replaces traditional bundling/build tooling in favor of explicit runtime loading.
  *  - Designed for browser-only execution (no Node.js environment).
@@ -35,7 +35,7 @@
  *  Runtime Assumptions:
  *  - Browser supports ES5+.
  *  - document.createElement + script.onload supported.
- *  - Network access to jsDelivr CDN.
+ *  - Network access to script host (raw.githack.com for testing; jsDelivr CDN for production).
  *
  * Outputs (produces):
  *
