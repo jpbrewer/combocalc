@@ -207,18 +207,17 @@
   const LIST_SELECTOR = ".solutions-list";
   const ROW_TEMPLATE_SELECTOR = '[data-solution-row="template"]';
   // Display-order for solution_grid row keys.
-  // Xano may return grouped keys (pos13, pos56) or individual keys (pos1, pos3, pos5, etc.)
+  // Xano may return grouped keys (pos13, pos46) or individual keys (pos1, pos3, etc.)
   // depending on the assembly template.  List every known key so none are skipped.
   const POS_ORDER = [
     "pos2",   // door / cased opening (always present)
-    "pos13",  // sidelites combined
     "pos1",   // left sidelite (when not grouped)
     "pos3",   // right sidelite (when not grouped)
+    "pos13",  // sidelites combined
+    "pos5",   // transom
     "pos4",   // mullion / intermediate element
-    "pos56",  // transoms combined
-    "pos5",   // transom (when not grouped)
-    "pos6",   // second transom (when not grouped)
-    "pos7",   // third tier / additional transom
+    "pos6",   // second transom
+    "pos46",  // transoms combined
   ];
 
   // =========================================
