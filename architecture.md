@@ -121,7 +121,7 @@ Assets / Data:
     - `assembly_template` (string or null)
     - `assembly_no` (number/string or null; from `assembly_no` or `arrangement_no`)
     - `icon` (string or null)
-    - `solution_grid` (object; may contain `notes` and position keys like `pos2`, `pos13`, `pos4`, `pos56`)
+    - `solution_grid` (object; contains `notes` and position keys — all optional: `pos2`, `pos1`, `pos3`, `pos13`, `pos5`, `pos4`, `pos6`, `pos46`)
     - `build_objects` (object in normalizer; later expected as array by renderer — see “Conflicts / Drift”)
     - `solution_svg` (string or null)
     - `meta` (object)
@@ -145,7 +145,7 @@ Assets / Data:
 - **Name in code:** `solution.solution_grid`
 - **Shape (known):**
   - top-level `notes` string (used as “summary”)
-  - position keys in `POS_ORDER = ["pos2","pos13","pos4","pos56"]` (optional):
+  - position keys in `POS_ORDER = ["pos2","pos1","pos3","pos13","pos5","pos4","pos6","pos46"]` (all optional):
     - row fields read for display:
       - `row`, `building_block`, `order_dims`, `quantity`, `door_unit_width`, `door_unit_height`
 - **Source of truth:** Retrieval payload.
@@ -395,9 +395,10 @@ Full contract documentation in webflow-contract.md
 - Use a single Webflow embed that loads `calc-bootstrap-loader.js` (the orchestrator). That file appends all other scripts into `document.head` sequentially.
 
 ### Caching/versioning strategy
-- Current loader uses jsDelivr with:
+- Current loader uses raw.githack.com for testing (no caching; immediate updates after push):
+  - `BASE = "https://raw.githack.com/jpbrewer/combocalc/claude-initialization/"`
+- For production, switch BASE back to jsDelivr:
   - `BASE = "https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@main/"`
-- No explicit cache-buster query param in the provided loader (so CDN caching rules apply).
 - Recommended approach for releases (guidance only):
   - Prefer pinned tags/commits (e.g., `@vX.Y.Z` or `@<sha>`) over `@main` to avoid unexpected production drift.
 

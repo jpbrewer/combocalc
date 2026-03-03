@@ -75,7 +75,7 @@
  *      - icon (string: filename, relative path, or absolute URL)
  *      - solution_grid (object) containing:
  *        - notes (string) at the top level of solution_grid
- *        - position keys: pos2, pos13, pos4, pos56 (optional) each containing:
+ *        - position keys (all optional): pos2, pos1, pos3, pos13, pos5, pos4, pos6, pos46, each containing:
  *          - row, building_block, order_dims, quantity, door_unit_width, door_unit_height
  *      - build_object_specs (object) (new name; may fall back from build_objects)
  *      - solution_svg (string; optional)
@@ -175,6 +175,7 @@
  *  - Adds modal open/close controls + Explore wiring; calls build_assembly_svg(index) after opening modal.
  *  - Adds Webflow asset icon mapping via #icon_registry to resolve logical filenames.
  *  - Adds form blocker overlay (#blocker_form) shown on success and removed on reset.
+ *  - Adds decimalToFraction() helper to format decimal inches as fractional (e.g., 60.25 → 60-1/4").
  *
  */
  

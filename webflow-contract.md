@@ -510,8 +510,8 @@ Required keys:
 -   `assembly_template` (string)
 -   `assembly_no` (number/string)
 -   `icon` (string)
--   `solution_grid` (object: keys `notes`, `pos2`, `pos13`, `pos4`, `pos56`)
--   `build_objects` (object — note: renderer may require array; see ingestion-gaps.md)
+-   `solution_grid` (object: key `notes` plus position keys `pos2`, `pos1`, `pos3`, `pos13`, `pos5`, `pos4`, `pos6`, `pos46` — all optional)
+-   `build_object_specs` (object — note: renderer may require array; see ingestion-gaps.md)
 -   `building_block_svgs` (populated by `build_block_svgs`)
 -   `assembly_svg` (produced by `build_assembly_svg`)
 
