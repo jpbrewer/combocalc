@@ -77,7 +77,7 @@
  *      - assembly_no or arrangement_no (number/string)
  *      - icon (string: filename, relative path, or absolute URL)
  *      - solution_grid (object) containing:
- *        - notes (string) at the top level of solution_grid
+ *        - solution_notes (string) at the top level of solution_grid
  *        - position keys (all optional): pos2, pos1, pos3, pos13, pos5, pos4, pos6, pos46, each containing:
  *          - row, building_block, order_dims, quantity, door_unit_width, door_unit_height
  *      - build_object_specs (object) (new name; may fall back from build_objects)
@@ -122,7 +122,7 @@
  *    - Modal overlay display toggled by openModal/closeModal.
  *    - Modal data grid:
  *      - populateModalGrid(idx) populates [data-modal-summary], sets icon via [data-modal-icon],
- *        clones [data-modal-row="template"] per position key, and populates [data-modal-notes].
+ *        clones [data-modal-row="template"] per position key, and populates [data-modal-notes] with solution_notes.
  *      - closeModal() clears cloned modal grid rows ([data-pos] elements) to prevent stale data.
  *
  *  Data Produced:
@@ -647,7 +647,7 @@
 
     // --- Notes ---
     if (notesRow) {
-      setField(notesRow, "notes", grid.notes ?? "");
+      setField(notesRow, "notes", grid.solution_notes ?? "");
     }
   }
 
@@ -829,7 +829,7 @@
   }
 
   function setSummary(card, solutionGrid) {
-    const summaryValue = solutionGrid?.notes ?? "";
+    const summaryValue = solutionGrid?.solution_notes ?? "";
     const summaryRow = card.querySelector('[data-solution-summary="row"]');
     if (!summaryRow) return;
     setField(summaryRow, "summary", summaryValue);
