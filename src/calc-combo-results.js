@@ -77,7 +77,8 @@
  *      - assembly_no or arrangement_no (number/string)
  *      - icon (string: filename, relative path, or absolute URL)
  *      - solution_grid (object) containing:
- *        - solution_notes (string) at the top level of solution_grid
+ *        - unit_notes (string) unit dimension text; rendered above position rows
+ *        - solution_notes (string) gap/planning info; rendered below position rows
  *        - position keys (all optional): pos2, pos1, pos3, pos13, pos5, pos4, pos6, pos46, each containing:
  *          - row, building_block, order_dims, quantity, door_unit_width, door_unit_height
  *      - build_object_specs (object) (new name; may fall back from build_objects)
@@ -118,12 +119,13 @@
  *      - cloning template card per solution
  *      - cloning row template per position key in POS_ORDER
  *      - populating [data-field="..."] nodes with solution_grid values
+ *      - cloning summary row for unit_notes (above position rows) and solution_notes (below)
  *      - setting icon <img data-field="icon"> src via ICON_MAP (or fallback resolution)
  *    - Modal overlay display toggled by openModal/closeModal.
  *    - Modal data grid:
  *      - populateModalGrid(idx) populates [data-modal-summary], sets icon via [data-modal-icon],
- *        clones [data-modal-row="template"] per position key, and populates [data-modal-notes] with solution_notes.
- *      - closeModal() clears cloned modal grid rows ([data-pos] elements) to prevent stale data.
+ *        clones [data-modal-notes] for unit_notes (top) and solution_notes (bottom) around position rows.
+ *      - closeModal() clears cloned modal grid rows ([data-pos] and [data-unit-notes]) to prevent stale data.
  *
  *  Data Produced:
  *  - Normalized solution objects stored in window.comboSolutions:
@@ -582,6 +584,7 @@
     const gridBlock = panel.querySelector(MODAL_GRID_SELECTOR);
     if (!gridBlock) return;
     gridBlock.querySelectorAll("[data-pos]").forEach(r => r.remove());
+    gridBlock.querySelectorAll("[data-unit-notes]").forEach(r => r.remove());
   }
 
   function populateModalGrid(idx) {
@@ -611,6 +614,7 @@
 
     // Remove previously cloned rows (keep template)
     gridBlock.querySelectorAll("[data-pos]").forEach(r => r.remove());
+    gridBlock.querySelectorAll("[data-unit-notes]").forEach(r => r.remove());
 
     const rowTemplate = gridBlock.querySelector(MODAL_ROW_SELECTOR);
     if (!rowTemplate) return;
@@ -619,6 +623,16 @@
     const rowContainer = rowTemplate.parentElement;
     const notesRow = gridBlock.querySelector(MODAL_NOTES_SELECTOR);
     const grid = sol.solution_grid || {};
+
+    // --- Unit Notes (top of grid) ---
+    const unitNotesValue = grid.unit_notes ?? "";
+    if (unitNotesValue.trim() && notesRow) {
+      const unitNotesClone = notesRow.cloneNode(true);
+      unitNotesClone.setAttribute("data-unit-notes", "row");
+      unitNotesClone.removeAttribute("data-modal-notes");
+      setField(unitNotesClone, "notes", unitNotesValue);
+      if (rowContainer) rowContainer.insertBefore(unitNotesClone, rowContainer.firstChild);
+    }
 
     POS_ORDER.forEach((posKey) => {
       const rowData = grid[posKey];
@@ -835,6 +849,19 @@
     setField(summaryRow, "summary", summaryValue);
   }
 
+  function setUnitNotes(card, solutionGrid) {
+    const unitNotesValue = solutionGrid?.unit_notes ?? "";
+    if (!unitNotesValue.trim()) return;
+    const summaryRow = card.querySelector('[data-solution-summary="row"]');
+    if (!summaryRow) return;
+    const clone = summaryRow.cloneNode(true);
+    clone.setAttribute("data-unit-notes", "row");
+    clone.removeAttribute("data-solution-summary");
+    setField(clone, "summary", unitNotesValue);
+    const rowsParent = summaryRow.parentElement;
+    if (rowsParent) rowsParent.insertBefore(clone, rowsParent.firstChild);
+  }
+
   function buildRowsInCard(card, solutionGrid) {
     const rowTemplate = card.querySelector(ROW_TEMPLATE_SELECTOR);
     if (!rowTemplate) return;
@@ -844,6 +871,7 @@
     $all(".solution-row", card).forEach((r) => {
       if (r.getAttribute("data-solution-row") !== "template") r.remove();
     });
+    card.querySelectorAll("[data-unit-notes]").forEach((r) => r.remove());
 
     rowTemplate.style.display = "none";
     const rowsParent = rowTemplate.parentElement;
@@ -908,6 +936,7 @@
 
       setIcon(card, sol.icon);
       buildRowsInCard(card, sol.solution_grid);
+      setUnitNotes(card, sol.solution_grid);
       setSummary(card, sol.solution_grid);
       wireExploreButton(card, idx);
 
