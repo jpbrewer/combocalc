@@ -52,3 +52,8 @@ DOC UPDATE CHECKLIST (RUN AFTER ANY CHANGE)
 - If you touched /src code: verify its top-of-file doc block is accurate.
 - If you touched DOM IDs / Webflow behavior: update /webflow-contract.md.
 - If you changed responsibilities, load order, or APIs: update /architecture.md.
+
+YOUR USE OF DOCUMENTATION SYSTEM
+While not required, it is anticipated that in plan mode, you will consult the documentation system just as you consult the code to answer questions and solve problems.
+
+Since the documentation system is a summary and is derivative of the code, documentation should be deemed reliable but not guaranteed, the code itself is the ultimate source of truth. 
