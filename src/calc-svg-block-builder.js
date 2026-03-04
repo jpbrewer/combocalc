@@ -125,6 +125,9 @@
  *    - door/sidelite/co/double_door are rotated -90° at the end (render_root transform + swapped viewBox dims).
  *    - co hides sash internals (rails/stiles/glass) and suppresses outside_boundary_sash stroke.
  *    - door-like modes hide `jamb_left`.
+ *  - Single-door blocks include two bore circle groups (<g data-bore="left"> and <g data-bore="right">)
+ *    in the sash group. Bore circles: 2.125" diameter, 36" from bottom, 2.375" from door edge (centerline),
+ *    white fill with boundary stroke styling. Visibility is controlled post-mount by window.updateBoreVisibility().
  *  - double_door behavior:
  *    - Upstream width is treated as TOTAL combined width; per-leaf input width is divided by 2.
  *    - Two leaves are stacked vertically in pre-rotation space with `MEETING_GAP` between them.
@@ -685,6 +688,56 @@ function renderOneBlockToSvgString(block, patternUrls) {
   // Keep boundaries on top
   bringToFront(unitBoundary);
   bringToFront(sashBoundary);
+
+  // ---- Door bore circles (single door only) ----
+  // Both left and right bores are created; visibility is set post-mount
+  // by window.updateBoreVisibility(). In pre-rotation coordinates:
+  //   final bottom = pre-rot left (x axis)
+  //   final left stile = pre-rot top (y axis)
+  //   final right stile = pre-rot bottom (y axis)
+  if (CONSTRUCTION === "door") {
+    var BORE_DIAMETER_PX = 2.125 * PX_PER_INCH;  // 204
+    var BORE_RADIUS = BORE_DIAMETER_PX / 2;       // 102
+    var BORE_FROM_BOTTOM_PX = 36 * PX_PER_INCH;   // 3456
+    var BORE_FROM_EDGE_PX = 2.375 * PX_PER_INCH;  // 228
+
+    // Pre-rotation: 36" from bottom = 36" from left edge (x)
+    var boreCx = sx + BORE_FROM_BOTTOM_PX;
+    // Right bore: 2.375" from outside edge of right stile; in pre-rot, right stile = bottom (y near sy+LEAF_HEIGHT)
+    var boreRightCy = sy + LEAF_HEIGHT - BORE_FROM_EDGE_PX;
+    // Left bore: 2.375" from outside edge of left stile; in pre-rot, left stile = top (y near sy)
+    var boreLeftCy = sy + BORE_FROM_EDGE_PX;
+
+    var svgNsBore = "http://www.w3.org/2000/svg";
+
+    var boreRightG = doc.createElementNS(svgNsBore, "g");
+    boreRightG.setAttribute("data-bore", "right");
+    var boreRightCircle = doc.createElementNS(svgNsBore, "circle");
+    boreRightCircle.setAttribute("cx", String(boreCx));
+    boreRightCircle.setAttribute("cy", String(boreRightCy));
+    boreRightCircle.setAttribute("r", String(BORE_RADIUS));
+    boreRightCircle.setAttribute("fill", "white");
+    boreRightCircle.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
+    boreRightCircle.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
+    boreRightCircle.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+    boreRightCircle.setAttribute("vector-effect", "non-scaling-stroke");
+    boreRightG.appendChild(boreRightCircle);
+    sashGroup.appendChild(boreRightG);
+
+    var boreLeftG = doc.createElementNS(svgNsBore, "g");
+    boreLeftG.setAttribute("data-bore", "left");
+    var boreLeftCircle = doc.createElementNS(svgNsBore, "circle");
+    boreLeftCircle.setAttribute("cx", String(boreCx));
+    boreLeftCircle.setAttribute("cy", String(boreLeftCy));
+    boreLeftCircle.setAttribute("r", String(BORE_RADIUS));
+    boreLeftCircle.setAttribute("fill", "white");
+    boreLeftCircle.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
+    boreLeftCircle.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
+    boreLeftCircle.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+    boreLeftCircle.setAttribute("vector-effect", "non-scaling-stroke");
+    boreLeftG.appendChild(boreLeftCircle);
+    sashGroup.appendChild(boreLeftG);
+  }
 
   // Hide prototypes in final output
   hideEl(vProto);

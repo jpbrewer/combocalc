@@ -240,6 +240,9 @@ Removing fixed height from `#explore` will break layout scaling.
 | `modal-close`   | `div`        | Close button for modal                                         | `calc-combo-results.js` | No close button; user must use ESC or click overlay |
 | `no-muntin`     | `div`        | Muntin toggle "off" button; default active (class `muntin-selection-active`) | `calc-combo-results.js` | Toggle not bound; default no-muntin render still works |
 | `yes-muntin`    | `div`        | Muntin toggle "on" button; shows actual rows/cols muntins      | `calc-combo-results.js` | Toggle not bound; user cannot switch to muntin view |
+| `choose-door-bore` | `div`     | Door bore chooser wrapper; normally hidden; shown when solution has single door | `calc-combo-results.js` | Bore chooser not shown; bore defaults to "right" |
+| `door-bore-left`   | `div`     | Door bore "left" selector (class `door-selection-active` when active) | `calc-combo-results.js` | Toggle not bound; bore stays at default side |
+| `door-bore-right`  | `div`     | Door bore "right" selector; default active (class `door-selection-active`) | `calc-combo-results.js` | Toggle not bound; bore stays at default side |
 
 ## Modal data grid elements (inside `#modal-panel`, after `#explore`)
 

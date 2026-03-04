@@ -40,6 +40,9 @@
  *    - #modal-close             (close button; closes modal)
  *    - #no-muntin              (text block; muntin toggle "off" — default active on modal open)
  *    - #yes-muntin             (text block; muntin toggle "on" — shows actual rows/cols muntins)
+ *    - #choose-door-bore       (div; door bore chooser wrapper — hidden by default; shown when solution has single door)
+ *    - #door-bore-left         (clickable element; selects left-side bore)
+ *    - #door-bore-right        (clickable element; selects right-side bore — default active)
  *  - Selectors / structural assumptions (inferred from code):
  *    - .solutions-list                  (container list where solution cards are appended)
  *    - [data-solution-card=”template”]  (template “solution card” to clone per solution)
@@ -86,6 +89,7 @@
  *      - meta (object; optional)
  *      - opening_width, opening_height, jamb_depth (optional; per-solution override of root values)
  *      - unit_width, unit_height (optional; decimal inches; used for SVG dimension annotations)
+ *      - door_bore ("left" | "right" | null; which stile gets the bore hole; defaults to "right" for single doors)
  *  - Required external function (called on Explore click):
  *    - window.build_assembly_svg(index) must exist for rendering; if missing, current behavior logs a warning and continues.
  *
@@ -105,6 +109,10 @@
  *  - Calls (requires) window.build_assembly_svg(index, muntins) on Explore click (muntins=false by default).
  *  - Muntin toggle: #no-muntin / #yes-muntin click handlers call build_assembly_svg with muntins false/true.
  *    CSS class "muntin-selection-active" is toggled on the active button.
+ *  - Door bore toggle: #door-bore-left / #door-bore-right click handlers update solution.door_bore,
+ *    invalidate assembly caches, and call window.updateBoreVisibility(side) for instant DOM toggle.
+ *    CSS class "door-selection-active" is toggled on the active button.
+ *    #choose-door-bore is shown (display:flex) only when the solution has a single_door build_object.
  *
  *  DOM Mutations:
  *  - Shows/hides:
@@ -129,7 +137,7 @@
  *
  *  Data Produced:
  *  - Normalized solution objects stored in window.comboSolutions:
- *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta, opening_width, opening_height, jamb_depth }
+ *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta, opening_width, opening_height, jamb_depth, door_bore }
  *  - ICON_MAP (internal) created from #icon_registry: filename → Webflow asset URL.
  *
  * Load Order / Dependencies:
@@ -207,8 +215,14 @@
   const YES_MUNTIN_ID = "yes-muntin";
   const MUNTIN_ACTIVE_CLASS = "muntin-selection-active";
 
+  const CHOOSE_DOOR_BORE_ID = "choose-door-bore";
+  const DOOR_BORE_LEFT_ID = "door-bore-left";
+  const DOOR_BORE_RIGHT_ID = "door-bore-right";
+  const DOOR_BORE_ACTIVE_CLASS = "door-selection-active";
+
   var currentModalIndex = null;
   var currentMuntinState = false;
+  var currentDoorBore = "right";
 
   const REQUEST_ENDPOINT_URL =
     "https://api.transomsdirect.com/api:xyi0dc0X/bc_combo_solution_request";
@@ -417,6 +431,10 @@
       currentModalIndex = idx;
       setMuntinToggleState(false);
 
+      // Configure door bore chooser (show/hide + set toggle)
+      var solution = window.comboSolutions[idx];
+      configureDoorBoreForModal(solution);
+
       if (typeof window.build_assembly_svg !== "function") {
         console.warn("build_assembly_svg(index) is not defined yet.");
         return;
@@ -425,6 +443,11 @@
         window.build_assembly_svg(idx, false);
       } catch (err) {
         console.error("build_assembly_svg failed:", err);
+      }
+
+      // Set bore visibility on the mounted SVG
+      if (solution && typeof window.updateBoreVisibility === "function") {
+        window.updateBoreVisibility(solution.door_bore || "right");
       }
 
       // Populate modal data grid (fail-soft)
@@ -510,6 +533,78 @@
         setMuntinToggleState(true);
         renderMuntinVersion(true);
       });
+    }
+  }
+
+  // =========================================
+  // DOOR BORE TOGGLE
+  // =========================================
+  function setDoorBoreToggleState(side) {
+    currentDoorBore = side;
+    var leftBtn = document.getElementById(DOOR_BORE_LEFT_ID);
+    var rightBtn = document.getElementById(DOOR_BORE_RIGHT_ID);
+
+    if (leftBtn) {
+      if (side === "left") leftBtn.classList.add(DOOR_BORE_ACTIVE_CLASS);
+      else leftBtn.classList.remove(DOOR_BORE_ACTIVE_CLASS);
+    }
+    if (rightBtn) {
+      if (side === "right") rightBtn.classList.add(DOOR_BORE_ACTIVE_CLASS);
+      else rightBtn.classList.remove(DOOR_BORE_ACTIVE_CLASS);
+    }
+  }
+
+  function applyDoorBoreToggle(side) {
+    if (currentModalIndex === null) return;
+    var solution = window.comboSolutions[currentModalIndex];
+    if (!solution) return;
+
+    solution.door_bore = side;
+
+    // Invalidate assembly caches so next full render re-serializes with correct state
+    delete solution.assembly_svg;
+    delete solution.assembly_svg_no_muntins;
+
+    // Update the live mounted SVG directly (no full re-render needed)
+    if (typeof window.updateBoreVisibility === "function") {
+      window.updateBoreVisibility(side);
+    }
+  }
+
+  function initDoorBoreToggle() {
+    var leftBtn = document.getElementById(DOOR_BORE_LEFT_ID);
+    var rightBtn = document.getElementById(DOOR_BORE_RIGHT_ID);
+
+    if (leftBtn) {
+      leftBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        if (currentDoorBore === "left") return;
+        setDoorBoreToggleState("left");
+        applyDoorBoreToggle("left");
+      });
+    }
+
+    if (rightBtn) {
+      rightBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        if (currentDoorBore === "right") return;
+        setDoorBoreToggleState("right");
+        applyDoorBoreToggle("right");
+      });
+    }
+  }
+
+  /** Show/hide #choose-door-bore and set toggle to match solution. */
+  function configureDoorBoreForModal(solution) {
+    var chooser = document.getElementById(CHOOSE_DOOR_BORE_ID);
+    if (!chooser) return;
+
+    if (solutionHasSingleDoor(solution)) {
+      ensureDoorBoreDefault(solution);
+      chooser.style.display = "flex";
+      setDoorBoreToggleState(solution.door_bore);
+    } else {
+      chooser.style.display = "none";
     }
   }
 
@@ -793,7 +888,29 @@
       // Unit dimensions for SVG dimension annotations
       unit_width:     sol.unit_width     ?? rootOpening.unit_width,
       unit_height:    sol.unit_height    ?? rootOpening.unit_height,
+
+      // Door bore side ("left" | "right" | null)
+      door_bore: sol.door_bore ?? null,
     }));
+  }
+
+  /** Returns true if solution contains at least one single_door build_object. */
+  function solutionHasSingleDoor(solution) {
+    var bos = solution && solution.build_objects;
+    if (!Array.isArray(bos)) return false;
+    for (var i = 0; i < bos.length; i++) {
+      var c = String(bos[i] && bos[i].construction || "").trim();
+      if (c === "single_door" || c === "single_door_only" || c === "single") return true;
+    }
+    return false;
+  }
+
+  /** Default door_bore to "right" for solutions with a single door. */
+  function ensureDoorBoreDefault(solution) {
+    if (!solution) return;
+    if (!solution.door_bore && solutionHasSingleDoor(solution)) {
+      solution.door_bore = "right";
+    }
   }
 
   // =========================================
@@ -972,6 +1089,7 @@
     hideSolutionsArea();
     initModalBehavior();
     initMuntinToggle();
+    initDoorBoreToggle();
 
     hideFormBlocker();
 

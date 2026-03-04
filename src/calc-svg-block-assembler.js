@@ -96,8 +96,14 @@
  * Outputs (produces):
  *
  * Public API:
- * - Global function exposed:
+ * - Global functions exposed:
  *     build_assembly_svg(index, muntins)
+ *     updateBoreVisibility(boreSide)
+ *       - boreSide ("left"|"right"): sets display on [data-bore] groups in the mounted #explore SVG.
+ *       - Called automatically after every mount (cached or fresh) using solution.door_bore || "right".
+ *       - Also called by calc-combo-results.js door bore toggle for instant DOM-only switching.
+ *
+ *     build_assembly_svg params:
  *       - index (number): position in window.comboSolutions.
  *       - muntins (boolean, optional): when false, renders with rows=1/cols=1 (no muntins).
  *         Defaults to true (use actual rows/cols) if omitted or undefined.
@@ -196,6 +202,20 @@
  *     - Writes assembly_svg back onto the solution object.
  *     - Renders result as inline DOM SVG inside #explore.
  */
+/**
+ * Sets the visibility of door bore circles in the mounted SVG inside #explore.
+ * @param {string} boreSide - "left" or "right"
+ */
+function updateBoreVisibility(boreSide) {
+  var explore = document.getElementById("explore");
+  if (!explore) return;
+  var boreLeft = explore.querySelector('[data-bore="left"]');
+  var boreRight = explore.querySelector('[data-bore="right"]');
+  if (boreLeft) boreLeft.style.display = (boreSide === "left") ? "" : "none";
+  if (boreRight) boreRight.style.display = (boreSide === "right") ? "" : "none";
+}
+window.updateBoreVisibility = updateBoreVisibility;
+
 function build_assembly_svg(index, muntins) {
   try {
     // 1) Validate globals / index
@@ -229,6 +249,8 @@ function build_assembly_svg(index, muntins) {
       const cachedDoc = new DOMParser().parseFromString(solution[assemblyCacheKey], "image/svg+xml");
       const cachedSvg = document.importNode(cachedDoc.documentElement, true);
       cachedExplore.appendChild(cachedSvg);
+
+      updateBoreVisibility(solution.door_bore || "right");
 
       return { svgElement: cachedSvg, svgString: solution[assemblyCacheKey], placements: null, template: null };
     }
@@ -414,6 +436,8 @@ function build_assembly_svg(index, muntins) {
 
     while (explore.firstChild) explore.removeChild(explore.firstChild);
     explore.appendChild(root);
+
+    updateBoreVisibility(solution.door_bore || "right");
 
     return { svgElement: root, svgString, placements, template: tpl };
   } catch (err) {
