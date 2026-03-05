@@ -421,8 +421,7 @@ These elements are populated by `setField()` inside cloned cards/rows:
 | `building_block`      | Building block descriptor text                        |
 | `order_dims`          | Order dimension string                                |
 | `quantity`            | Quantity value                                        |
-| `door_unit_width`     | Door unit width value                                 |
-| `door_unit_height`    | Door unit height value                                |
+| `line_notes`          | Line notes value (may contain "XX" marker for door type label) |
 | `summary`             | Summary/notes string from `solution_grid.notes`       |
 
 ## Icon registry lookup
@@ -492,7 +491,7 @@ Full list of `data-*` attributes used by JS as selectors or data carriers:
 | `data-solution-explore`     | `"btn"`                   | `calc-combo-results.js`   | Receives `data-solution-index` on clone wiring                  |
 | `data-solution-icon`        | `"img"`                   | `calc-combo-results.js`   | Wrapper element; must contain `<img data-field="icon">`         |
 | `data-solution-index`       | numeric string (0-based)  | `calc-combo-results.js`   | Written by JS; read on Explore click to index `window.comboSolutions` |
-| `data-field`                | see Rendering Targets §8  | `calc-combo-results.js`   | `icon`, `row`, `building_block`, `order_dims`, `quantity`, `door_unit_width`, `door_unit_height`, `summary`; modal also uses `notes`, `opening_width`, `opening_height`, `jamb_depth` |
+| `data-field`                | see Rendering Targets §8  | `calc-combo-results.js`   | `icon`, `row`, `building_block`, `order_dims`, `quantity`, `line_notes`, `summary`; modal also uses `notes`, `opening_width`, `opening_height`, `jamb_depth` |
 | `data-icon-name`            | filename string (e.g. `arrangement_14_icon.png`) | `calc-combo-results.js` | On `<img>` inside `#icon_registry`; keyed into `ICON_MAP` |
 | `data-modal-summary`        | `"section"`               | `calc-combo-results.js`   | Opening summary block inside modal                          |
 | `data-modal-grid`           | `"section"`               | `calc-combo-results.js`   | Solution grid wrapper inside modal                          |
@@ -590,7 +589,7 @@ High risk breakage areas:
 -   Renaming `data-solution-card`, `data-solution-row`, `data-solution-summary`, `data-solution-explore`, `data-solution-icon` attributes
 -   Renaming `data-modal-summary`, `data-modal-grid`, `data-modal-icon`, `data-modal-row`, `data-modal-notes`, `data-modal-configure` attributes — breaks modal grid population
 -   Removing modal grid template elements degrades gracefully (no crash) but modal data will not display
--   Renaming any `data-field` value (`icon`, `row`, `building_block`, `order_dims`, `quantity`, `door_unit_width`, `door_unit_height`, `summary`, `notes`, `opening_width`, `opening_height`, `jamb_depth`)
+-   Renaming any `data-field` value (`icon`, `row`, `building_block`, `order_dims`, `quantity`, `line_notes`, `summary`, `notes`, `opening_width`, `opening_height`, `jamb_depth`)
 -   Removing or renaming `.solutions-list` CSS class — breaks card list container lookup
 -   Removing or renaming any of the 6 pattern image IDs (`img_rail_wood` etc.) — breaks SVG block pattern fills
 -   Webflow Interactions (`data-w-id`) being re-added to cloned cards — JS strips these; if Webflow re-attaches to originals after publish, clones may inherit them before strip runs
