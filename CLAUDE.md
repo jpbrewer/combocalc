@@ -1,6 +1,30 @@
-ComboCalc — Project Instructions (Claude)
+# CLAUDE.md
 
-This repository is a browser-only JavaScript application embedded into Webflow and loaded via CDN (jsDelivr). Webflow owns HTML structure and CSS. This repo’s JS owns behavior, orchestration, rendering, and Xano API integration.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+ComboCalc is a browser-only JavaScript application embedded into Webflow pages and loaded via CDN (jsDelivr). Webflow owns HTML structure and CSS. This repo’s JS owns behavior, orchestration, rendering, and Xano API integration.
+
+## Development Workflow
+
+There is no build step, no bundler, no test runner, no linter, and no package.json. The JS files run directly in the browser via sequential `<script>` injection.
+
+**Testing changes:** Switch the `BASE` URL in `src/calc-bootstrap-loader.js` to use raw.githack.com (no caching) pointed at your branch, then hard-refresh the Webflow page:
+- Production: `https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@main/`
+- Testing: `https://raw.githack.com/jpbrewer/combocalc/<branch>/`
+
+**Verifying changes manually:** Load the Webflow page, submit the form, confirm solutions render, click Explore, confirm SVG renders in modal.
+
+## Architecture at a Glance
+
+All scripts communicate via `window` globals. `calc-bootstrap-loader.js` is the single entry point embedded in Webflow; it injects all other scripts sequentially via its `FILE_ORDER` array.
+
+**Data flow:** Form submit → async POST to Xano → poll until ready → normalize response into `window.comboSolutions` → render solution cards → on Explore click, build parametric SVG blocks from template + assemble composite SVG via layout template ops → mount in modal.
+
+**Key globals:** `window.comboSolutions` (solution store), `window.job_id`, `window.ASSEMBLY_TEMPLATES`, `window.WINDOW_TYPE_A_SVG_TEXT`, `window.build_block_svgs(index)`, `window.build_assembly_svg(index)`.
+
+See `/architecture.md` for full details including module inventory, data model, DOM contract, and load order.
 
 DOCUMENTATION SYSTEM (REQUIRED)
 This project uses a “policy + skills” documentation approach:

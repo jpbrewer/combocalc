@@ -40,6 +40,7 @@
  *    - #modal-close             (close button; closes modal)
  *    - #no-muntin              (text block; muntin toggle "off" — default active on modal open)
  *    - #yes-muntin             (text block; muntin toggle "on" — shows actual rows/cols muntins)
+ *    - #hardware_wrapper_div   (div; hardware controls wrapper — hidden by default; shown (display:flex) when solution has any door)
  *    - #choose-door-bore       (div; door bore chooser wrapper — hidden by default; shown when solution has single door)
  *    - #door-bore-left         (clickable element; selects left-side bore)
  *    - #door-bore-right        (clickable element; selects right-side bore — default active)
@@ -227,6 +228,7 @@
   const DOOR_BORE_RIGHT_ID = "door-bore-right";
   const DOOR_BORE_ACTIVE_CLASS = "door-selection-active";
 
+  const HARDWARE_WRAPPER_DIV_ID = "hardware_wrapper_div";
   const HARDWARE_COLOR_WRAPPER_ID = "hardware-color-wrapper";
   const HARDWARE_SELECTOR_ID = "hardware-selector";
   const DBL_DOOR_WRAPPER_ID = "dbl-door-wrapper";
@@ -463,6 +465,7 @@
       // Configure door bore chooser and hardware color selector
       var solution = window.comboSolutions[idx];
       configureDoorBoreForModal(solution);
+      configureHardwareWrapperForModal(solution);
       configureHardwareColorForModal(solution);
       configureDblDoorWrapperForModal(solution);
 
@@ -745,6 +748,13 @@
     } else {
       wrapper.style.display = "none";
     }
+  }
+
+  /** Show #hardware_wrapper_div only for solutions with any door (single or double). */
+  function configureHardwareWrapperForModal(solution) {
+    var wrapper = document.getElementById(HARDWARE_WRAPPER_DIV_ID);
+    if (!wrapper) return;
+    wrapper.style.display = solutionHasAnyDoor(solution) ? "flex" : "none";
   }
 
   /** Show #dbl-door-wrapper only for double_door solutions. */

@@ -469,6 +469,7 @@ function applyFinalTransformAndViewBox(svgEl, renderRootEl, fit, rotated) {
 function normalizeConstruction(c) {
   const s = String(c || "").trim();
   if (s === "single_door" || s === "single_door_only" || s === "single") return "door";
+  if (s === "cased_opening") return "co";
   if (s === "window") return "transom"; // legacy safety
   return s;
 }
