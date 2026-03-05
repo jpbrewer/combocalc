@@ -226,9 +226,8 @@ Removing fixed height from `#explore` will break layout scaling.
 | `door_width_msmt_wrapper`         | `div`                          | Contains door width measurement input field                  | `calc-query.js` | Script disables itself on boot (required) |
 | `co_detail_wrapper`               | `div`                          | Contains all CO-specific Section C controls                  | `calc-query.js` | Script disables itself on boot (required) |
 | `co_width_msmt_wrapper`           | `div`                          | Contains CO width measurement input field                    | `calc-query.js` | Script disables itself on boot (required) |
-| `specify_side_gaps_check_box_wrapper` | `<label class="w-checkbox">` | Row wrapper for specify-side-gaps checkbox                   | `calc-query.js` | Script disables itself on boot (required) |
+| `gap_wrapper_div`                 | `div`                          | Parent wrapper for all gap-related controls (specify checkboxes + measurements) | `calc-query.js` | Script disables itself on boot (required) |
 | `side_gap_msmt_wrapper`           | `div`                          | Contains side gap measurement input field                    | `calc-query.js` | Script disables itself on boot (required) |
-| `specify_top_gap_check_box_wrapper` | `<label class="w-checkbox">` | Row wrapper for specify-top-gap checkbox                     | `calc-query.js` | Script disables itself on boot (required) |
 | `top_gap_msmt_wrapper`            | `div`                          | Contains top gap measurement input field                     | `calc-query.js` | Script disables itself on boot (required) |
 
 ## Modal elements
@@ -339,20 +338,19 @@ After master reset:
 | `advanced_check_box`        | unchecked           |
 | `specify_side_gaps_check_box`| unchecked          |
 | `specify_top_gap_check_box` | unchecked           |
-| `door_detail_wrapper`       | visible             |
+| `door_detail_wrapper`       | hidden              |
 | `door_width_scope_wrapper`  | hidden              |
 | `door_width_msmt_wrapper`   | hidden              |
 | `co_detail_wrapper`         | hidden              |
 | `co_width_msmt_wrapper`     | hidden              |
-| `specify_side_gaps_check_box_wrapper` | hidden    |
+| `gap_wrapper_div`           | hidden              |
 | `side_gap_msmt_wrapper`     | hidden              |
-| `specify_top_gap_check_box_wrapper`   | hidden    |
 | `top_gap_msmt_wrapper`      | hidden              |
 
 ## Section C — OUT group rules (Door vs CO)
 
 **When `out_door_radio` selected (Door mode):**
--   `door_detail_wrapper` → visible
+-   `door_detail_wrapper` → visible **only if `advanced_check_box` is also checked**
 -   `co_detail_wrapper` → hidden
 -   `co_width_msmt_wrapper` → hidden
 -   Door width rules apply (see below)
@@ -361,7 +359,7 @@ After master reset:
 -   `door_detail_wrapper` → hidden
 -   `door_width_scope_wrapper` → hidden
 -   `door_width_msmt_wrapper` → hidden
--   `co_detail_wrapper` → visible
+-   `co_detail_wrapper` → visible **only if `advanced_check_box` is also checked**
 -   `cwho_system_decides_radio` → force-checked
 -   Door controls cleared: `dht_standard_radio`, `dwho_system_decides_radio`,
     `dwho_user_decides_radio`, `dws_unit_dim_radio`, `dws_slab_dim_radio`
@@ -386,8 +384,8 @@ After master reset:
 
 | State                                      | Result                                                |
 |--------------------------------------------|-------------------------------------------------------|
-| `advanced_check_box` unchecked             | `specify_side_gaps_check_box_wrapper` hidden; `specify_top_gap_check_box_wrapper` hidden; both measurement wrappers hidden; both sub-checkboxes cleared |
-| `advanced_check_box` checked               | Both checkbox wrappers shown; measurement wrappers shown only if corresponding checkbox is checked |
+| `advanced_check_box` unchecked (transition) | Full Section C master reset (same as `resetSectionC()`): all controls return to defaults, all wrappers hidden. Only triggers on checked→unchecked transition, not on every render. |
+| `advanced_check_box` checked               | `gap_wrapper_div` shown; measurement wrappers shown only if corresponding checkbox is checked; `door_detail_wrapper` or `co_detail_wrapper` shown based on current OUT radio selection |
 | `specify_side_gaps_check_box` checked      | `side_gap_msmt_wrapper` shown                         |
 | `specify_top_gap_check_box` checked        | `top_gap_msmt_wrapper` shown                          |
 

@@ -218,8 +218,8 @@ Full contract documentation in webflow-contract.md
   - `door_detail_wrapper`
   - `door_width_scope_wrapper`, `door_width_msmt_wrapper`
   - `co_detail_wrapper`, `co_width_msmt_wrapper`
-  - `specify_side_gaps_check_box_wrapper`, `side_gap_msmt_wrapper`
-  - `specify_top_gap_check_box_wrapper`, `top_gap_msmt_wrapper`
+  - `gap_wrapper_div` (parent of specify checkboxes + measurement inputs)
+  - `side_gap_msmt_wrapper`, `top_gap_msmt_wrapper`
 
 **Webflow structure assumptions used:**
 - Input rows are hidden by finding the closest wrapper: `.w-radio` / `.w-checkbox` or nearest `label` as fallback.

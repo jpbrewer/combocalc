@@ -43,8 +43,8 @@
  *    - door_detail_wrapper
  *    - door_width_scope_wrapper, door_width_msmt_wrapper
  *    - co_detail_wrapper, co_width_msmt_wrapper
- *    - specify_side_gaps_check_box_wrapper, side_gap_msmt_wrapper
- *    - specify_top_gap_check_box_wrapper, top_gap_msmt_wrapper
+ *    - gap_wrapper_div (parent of specify checkboxes + measurement inputs)
+ *    - side_gap_msmt_wrapper, top_gap_msmt_wrapper
  *
  * Outputs:
  *  - DOM changes:
@@ -89,15 +89,20 @@
  *  - Starting Point:
  *      Selecting any starting point triggers a full Section C master reset and unblocks C.
  *  - Door vs CO (OUT group):
- *      OUT=CO -> show CO detail; hide door detail & door width controls; force cwho_system_decides.
+ *      OUT=CO -> show CO detail (if advanced checked); hide door detail & door width controls; force cwho_system_decides.
+ *      OUT=DOOR -> show door detail (if advanced checked); hide CO detail.
  *      Switching OUT from CO -> DOOR -> performs a FULL Section C reset.
  *  - Door width logic:
  *      dwho_system_decides -> hide door width scope + msmt; clear dws radios.
  *      dwho_user_decides -> show scope; reveal msmt only if dws_* chosen.
  *  - Advanced:
- *      advanced_check_box controls visibility of the “specify gaps” checkboxes and their measurement wrappers.
- *      specify_side_gaps_check_box toggles side_gap_msmt_wrapper.
- *      specify_top_gap_check_box toggles top_gap_msmt_wrapper.
+ *      advanced_check_box gates visibility of door_detail_wrapper, co_detail_wrapper,
+ *      and gap_wrapper_div (which contains the specify-gaps checkboxes and measurement inputs).
+ *      Door/CO detail wrappers require BOTH the corresponding radio AND advanced checked.
+ *      Unchecking advanced triggers a full Section C master reset (resetSectionC).
+ *      gap_wrapper_div is shown/hidden as a unit; within it:
+ *        specify_side_gaps_check_box toggles side_gap_msmt_wrapper.
+ *        specify_top_gap_check_box toggles top_gap_msmt_wrapper.
  *
  * Version notes:
  *  - v10+: Includes Webflow redirected UI sync, advanced measurement reveal, and CO->Door full reset.
@@ -148,9 +153,8 @@
     divCoDetail: "co_detail_wrapper",
     divCoWidthMsmt: "co_width_msmt_wrapper",
 
-    divSpecifySideWrapper: "specify_side_gaps_check_box_wrapper",
+    divGapWrapper: "gap_wrapper_div",
     divSideGapMsmt: "side_gap_msmt_wrapper",
-    divSpecifyTopWrapper: "specify_top_gap_check_box_wrapper",
     divTopGapMsmt: "top_gap_msmt_wrapper",
   };
 
@@ -188,9 +192,8 @@
     IDS.divDoorWidthMsmt,
     IDS.divCoDetail,
     IDS.divCoWidthMsmt,
-    IDS.divSpecifySideWrapper,
+    IDS.divGapWrapper,
     IDS.divSideGapMsmt,
-    IDS.divSpecifyTopWrapper,
     IDS.divTopGapMsmt,
   ];
 
@@ -253,7 +256,7 @@
     dispatchValueEvents(el);
   };
 
-  // Use for “force clear” without re-entrant render loops
+  // Use for “force set” without re-entrant render loops
   const hardUncheck = (id) => {
     const el = byId(id);
     if (!el) return;
@@ -261,10 +264,17 @@
     syncWebflowMirror(el);
   };
 
+  const hardCheck = (id) => {
+    const el = byId(id);
+    if (!el) return;
+    el.checked = true;
+    syncWebflowMirror(el);
+  };
+
   const hardUncheckMany = (ids) => ids.forEach(hardUncheck);
+  const hardCheckMany = (ids) => ids.forEach(hardCheck);
 
   const uncheckMany = (ids) => ids.forEach((id) => setChecked(id, false));
-  const checkMany = (ids) => ids.forEach((id) => setChecked(id, true));
 
   const setBlocker = (blockerId, on) => {
     const el = byId(blockerId);
@@ -318,13 +328,14 @@
   // ---- Mode trackers ----
   let lastDwhoMode = null; // "system" | "user" | null
   let lastOutMode = null; // "door" | "co" | null
+  let lastAdvancedState = false; // tracks advanced checkbox for transition detection
 
   // ---------------------------
   // RESET SECTION C
   // ---------------------------
   const resetSectionC = () => {
     // Defaults: OUT=door, standard door height, door who decides=system
-    checkMany([IDS.outDoor, IDS.dhtStandard, IDS.dwhoSystemDecides]);
+    hardCheckMany([IDS.outDoor, IDS.dhtStandard, IDS.dwhoSystemDecides]);
 
     // Clear CO who decides
     hardUncheck(IDS.cwhoSystemDecides);
@@ -334,23 +345,23 @@
     hardUncheckMany([IDS.dwsUnitDim, IDS.dwsSlabDim]);
 
     // Advanced defaults: off
-    uncheckMany([IDS.advanced, IDS.specifySideGaps, IDS.specifyTopGap]);
+    hardUncheckMany([IDS.advanced, IDS.specifySideGaps, IDS.specifyTopGap]);
 
     // Visibility defaults (per spec)
-    showDiv(IDS.divDoorDetail, "");
     [
+      IDS.divDoorDetail,
       IDS.divDoorWidthScope,
       IDS.divDoorWidthMsmt,
       IDS.divCoDetail,
       IDS.divCoWidthMsmt,
-      IDS.divSpecifySideWrapper,
+      IDS.divGapWrapper,
       IDS.divSideGapMsmt,
-      IDS.divSpecifyTopWrapper,
       IDS.divTopGapMsmt,
     ].forEach(hideDiv);
 
     lastDwhoMode = null;
     lastOutMode = null;
+    lastAdvancedState = false;
   };
 
   // ---------------------------
@@ -415,7 +426,7 @@
         IDS.dwsSlabDim,
       ]);
 
-      setChecked(IDS.cwhoSystemDecides, true);
+      hardCheck(IDS.cwhoSystemDecides);
       lastDwhoMode = null;
     }
 
@@ -424,7 +435,8 @@
     hideDiv(IDS.divDoorWidthScope);
     hideDiv(IDS.divDoorWidthMsmt);
 
-    showDiv(IDS.divCoDetail, "");
+    if (isChecked(IDS.advanced)) showDiv(IDS.divCoDetail, "");
+    else hideDiv(IDS.divCoDetail);
 
     // CO width measurement depends on CO who decides
     if (isChecked(IDS.cwhoUserDecide)) showDiv(IDS.divCoWidthMsmt, "");
@@ -441,7 +453,8 @@
     }
 
     if (outMode === "door") {
-      showDiv(IDS.divDoorDetail, "");
+      if (isChecked(IDS.advanced)) showDiv(IDS.divDoorDetail, "");
+      else hideDiv(IDS.divDoorDetail);
       hideDiv(IDS.divCoDetail);
       hideDiv(IDS.divCoWidthMsmt);
     }
@@ -459,9 +472,8 @@
     const adv = isChecked(IDS.advanced);
 
     if (adv) {
-      // Show the advanced checkbox wrappers
-      showDiv(IDS.divSpecifySideWrapper, "");
-      showDiv(IDS.divSpecifyTopWrapper, "");
+      // Show the gap wrapper (contains specify checkboxes + measurement inputs)
+      showDiv(IDS.divGapWrapper, "");
 
       // Show/hide measurements based on the specify checkboxes
       if (isChecked(IDS.specifySideGaps)) showDiv(IDS.divSideGapMsmt, "");
@@ -470,17 +482,25 @@
       if (isChecked(IDS.specifyTopGap)) showDiv(IDS.divTopGapMsmt, "");
       else hideDiv(IDS.divTopGapMsmt);
 
+      // Show door/CO detail based on current radio selection
+      if (isChecked(IDS.outDoor)) {
+        showDiv(IDS.divDoorDetail, "");
+        hideDiv(IDS.divCoDetail);
+      } else if (isChecked(IDS.outCO)) {
+        showDiv(IDS.divCoDetail, "");
+        hideDiv(IDS.divDoorDetail);
+      }
+
+      lastAdvancedState = true;
       return;
     }
 
-    // If advanced unchecked: clear + hide everything in this group
-    setChecked(IDS.specifySideGaps, false);
-    setChecked(IDS.specifyTopGap, false);
+    // Only reset Section C on checked → unchecked transition
+    if (lastAdvancedState) {
+      resetSectionC();
+    }
 
-    hideDiv(IDS.divSpecifySideWrapper);
-    hideDiv(IDS.divSpecifyTopWrapper);
-    hideDiv(IDS.divSideGapMsmt);
-    hideDiv(IDS.divTopGapMsmt);
+    lastAdvancedState = false;
   };
 
   // ---------------------------
