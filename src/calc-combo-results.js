@@ -114,6 +114,7 @@
  *    invalidate assembly caches, and call window.updateBoreVisibility(side) + window.updateHingeVisibility()
  *    for instant DOM toggle. CSS class "door-selection-active" is toggled on the active button.
  *    #choose-door-bore is shown (display:flex) only when the solution has a single_door build_object.
+ *    Also updates door_unit_height labels in the modal grid (Left-Hand ↔ Right-Hand).
  *  - Hardware color selector: a <select> populated from window.HARDWARE_COLORS is created inside
  *    #hardware-selector. On change, updates solution.hardware_color and calls window.updateHingeColor(hex).
  *    #hardware-color-wrapper is shown (display:flex) when solution has any door (single or double).
@@ -131,6 +132,8 @@
  *      - cloning template card per solution
  *      - cloning row template per position key in POS_ORDER
  *      - populating [data-field="..."] nodes with solution_grid values
+ *      - door_unit_height "XX" marker replaced: "Single-Hung"/"Double-Hung" in listing cards,
+ *        "Left-Hand"/"Right-Hand" in modal (toggles with bore side)
  *      - cloning summary row for unit_notes (above position rows) and solution_notes (below)
  *      - setting icon <img data-field="icon"> src via ICON_MAP (or fallback resolution)
  *    - Modal overlay display toggled by openModal/closeModal.
@@ -609,6 +612,9 @@
     if (typeof window.updateHingeVisibility === "function") {
       window.updateHingeVisibility("single_door", side);
     }
+
+    // Update door type label in modal grid (Left-Hand ↔ Right-Hand)
+    updateDoorTypeLabelsInModal(side);
   }
 
   function initDoorBoreToggle() {
@@ -885,7 +891,8 @@
       setField(row, "order_dims",       rowData.order_dims);
       setField(row, "quantity",         rowData.quantity);
       setField(row, "door_unit_width",  rowData.door_unit_width);
-      setField(row, "door_unit_height", rowData.door_unit_height);
+      var duhVal = rowData.door_unit_height != null ? String(rowData.door_unit_height) : "";
+      setField(row, "door_unit_height", duhVal.replace("XX", resolveDoorTypeLabel(sol, "modal")));
 
       if (notesRow && notesRow.parentElement === rowContainer) {
         rowContainer.insertBefore(row, notesRow);
@@ -1082,6 +1089,33 @@
     return solutionHasSingleDoor(solution) || solutionHasDoubleDoor(solution);
   }
 
+  /** Resolve the door type label to replace the "XX" marker in door_unit_height.
+   *  @param {object} solution
+   *  @param {"listing"|"modal"} context - "listing" for solution cards, "modal" for Explore
+   *  @param {string} [boreSide] - override bore side (used by toggle); falls back to solution.door_bore
+   */
+  function resolveDoorTypeLabel(solution, context, boreSide) {
+    if (solutionHasDoubleDoor(solution)) return "Double-Hung";
+    if (!solutionHasSingleDoor(solution)) return "XX";
+    if (context === "listing") return "Single-Hung";
+    // modal context: label reflects bore side
+    var side = boreSide || solution.door_bore || "right";
+    return (side === "left") ? "Left-Hand" : "Right-Hand";
+  }
+
+  /** Update door_unit_height labels in the modal grid when bore side toggles.
+   *  Swaps "Left-Hand" ↔ "Right-Hand" in all modal [data-field="door_unit_height"] elements. */
+  function updateDoorTypeLabelsInModal(side) {
+    var panel = document.getElementById(MODAL_PANEL_ID);
+    if (!panel) return;
+    var duhEls = panel.querySelectorAll('[data-field="door_unit_height"]');
+    var newLabel = (side === "left") ? "Left-Hand" : "Right-Hand";
+    var oldLabel = (side === "left") ? "Right-Hand" : "Left-Hand";
+    for (var i = 0; i < duhEls.length; i++) {
+      duhEls[i].textContent = duhEls[i].textContent.replace(oldLabel, newLabel);
+    }
+  }
+
   /** Look up hardware hex color from HARDWARE_COLORS by name. Defaults to Chrome. */
   function resolveHardwareHex(colorName) {
     var colors = window.HARDWARE_COLORS;
@@ -1164,7 +1198,7 @@
     if (rowsParent) rowsParent.insertBefore(clone, rowsParent.firstChild);
   }
 
-  function buildRowsInCard(card, solutionGrid) {
+  function buildRowsInCard(card, solutionGrid, solution) {
     const rowTemplate = card.querySelector(ROW_TEMPLATE_SELECTOR);
     if (!rowTemplate) return;
 
@@ -1194,7 +1228,8 @@
       setField(row, "order_dims", rowData.order_dims);
       setField(row, "quantity", rowData.quantity);
       setField(row, "door_unit_width", rowData.door_unit_width);
-      setField(row, "door_unit_height", rowData.door_unit_height);
+      var duhVal = rowData.door_unit_height != null ? String(rowData.door_unit_height) : "";
+      setField(row, "door_unit_height", duhVal.replace("XX", resolveDoorTypeLabel(solution, "listing")));
 
       if (summaryRow && summaryRow.parentElement === rowsParent) {
         rowsParent.insertBefore(row, summaryRow);
@@ -1237,7 +1272,7 @@
       stripWebflowInteractionIds(card);
 
       setIcon(card, sol.icon);
-      buildRowsInCard(card, sol.solution_grid);
+      buildRowsInCard(card, sol.solution_grid, sol);
       setUnitNotes(card, sol.solution_grid);
       setSummary(card, sol.solution_grid);
       wireExploreButton(card, idx);

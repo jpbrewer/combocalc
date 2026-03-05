@@ -160,6 +160,10 @@ Assets / Data:
   - position keys in `POS_ORDER = ["pos2","pos1","pos3","pos13","pos5","pos4","pos6","pos46"]` (all optional):
     - row fields read for display:
       - `row`, `building_block`, `order_dims`, `quantity`, `door_unit_width`, `door_unit_height`
+  - `door_unit_height` contains an "XX" marker that is replaced client-side:
+    - Listing cards: "Single-Hung" (single_door) or "Double-Hung" (double_door)
+    - Modal: "Left-Hand" / "Right-Hand" (single_door, based on door_bore) or "Double-Hung" (double_door)
+    - Bore toggle swaps "Left-Hand" ↔ "Right-Hand" in the modal
 - **Source of truth:** Retrieval payload.
 
 ### `solution.building_block_svgs`
