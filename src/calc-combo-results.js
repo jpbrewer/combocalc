@@ -90,6 +90,7 @@
  *      - opening_width, opening_height, jamb_depth (optional; per-solution override of root values)
  *      - unit_width, unit_height (optional; decimal inches; used for SVG dimension annotations)
  *      - door_bore ("left" | "right" | null; which stile gets the bore hole; defaults per assembly template's door_bore value)
+ *      - hardware_color (string | null; hardware color name e.g. "Chrome"; defaults to "Chrome" for solutions with doors)
  *  - Required external function (called on Explore click):
  *    - window.build_assembly_svg(index) must exist for rendering; if missing, current behavior logs a warning and continues.
  *
@@ -110,9 +111,12 @@
  *  - Muntin toggle: #no-muntin / #yes-muntin click handlers call build_assembly_svg with muntins false/true.
  *    CSS class "muntin-selection-active" is toggled on the active button.
  *  - Door bore toggle: #door-bore-left / #door-bore-right click handlers update solution.door_bore,
- *    invalidate assembly caches, and call window.updateBoreVisibility(side) for instant DOM toggle.
- *    CSS class "door-selection-active" is toggled on the active button.
+ *    invalidate assembly caches, and call window.updateBoreVisibility(side) + window.updateHingeVisibility()
+ *    for instant DOM toggle. CSS class "door-selection-active" is toggled on the active button.
  *    #choose-door-bore is shown (display:flex) only when the solution has a single_door build_object.
+ *  - Hardware color selector: a <select> populated from window.HARDWARE_COLORS is created inside
+ *    #hardware-selector. On change, updates solution.hardware_color and calls window.updateHingeColor(hex).
+ *    #hardware-color-wrapper is shown (display:flex) when solution has any door (single or double).
  *
  *  DOM Mutations:
  *  - Shows/hides:
@@ -219,6 +223,10 @@
   const DOOR_BORE_LEFT_ID = "door-bore-left";
   const DOOR_BORE_RIGHT_ID = "door-bore-right";
   const DOOR_BORE_ACTIVE_CLASS = "door-selection-active";
+
+  const HARDWARE_COLOR_WRAPPER_ID = "hardware-color-wrapper";
+  const HARDWARE_SELECTOR_ID = "hardware-selector";
+  const DBL_DOOR_WRAPPER_ID = "dbl-door-wrapper";
 
   var currentModalIndex = null;
   var currentMuntinState = false;
@@ -395,7 +403,25 @@
     const overlay = document.getElementById(MODAL_OVERLAY_ID);
     if (overlay) overlay.style.display = "flex";
   }
+  function resetHardwareColorToChrome() {
+    // Reset solution object if one is active
+    if (currentModalIndex !== null && window.comboSolutions) {
+      var solution = window.comboSolutions[currentModalIndex];
+      if (solution) {
+        solution.hardware_color = "Chrome";
+        solution.assembly_svg = null;
+        solution.assembly_svg_no_muntins = null;
+      }
+    }
+    // Reset the on-screen selector
+    var sel = document.getElementById("hardware-color-select");
+    if (sel) sel.value = "Chrome";
+  }
+
   function closeModal() {
+    resetHardwareColorToChrome();
+    var dblWrapper = document.getElementById(DBL_DOOR_WRAPPER_ID);
+    if (dblWrapper) dblWrapper.style.display = "none";
     const overlay = document.getElementById(MODAL_OVERLAY_ID);
     if (overlay) overlay.style.display = "none";
     clearModalGridRows();
@@ -431,9 +457,11 @@
       currentModalIndex = idx;
       setMuntinToggleState(false);
 
-      // Configure door bore chooser (show/hide + set toggle)
+      // Configure door bore chooser and hardware color selector
       var solution = window.comboSolutions[idx];
       configureDoorBoreForModal(solution);
+      configureHardwareColorForModal(solution);
+      configureDblDoorWrapperForModal(solution);
 
       if (typeof window.build_assembly_svg !== "function") {
         console.warn("build_assembly_svg(index) is not defined yet.");
@@ -445,9 +473,16 @@
         console.error("build_assembly_svg failed:", err);
       }
 
-      // Set bore visibility on the mounted SVG
+      // Set bore and hinge visibility on the mounted SVG
       if (solution && typeof window.updateBoreVisibility === "function") {
         window.updateBoreVisibility(solution.door_bore || "right");
+      }
+      if (solution && typeof window.updateHingeVisibility === "function") {
+        var doorType = solutionHasDoubleDoor(solution) ? "double_door"
+                     : solutionHasSingleDoor(solution) ? "single_door" : null;
+        if (doorType) {
+          window.updateHingeVisibility(doorType, solution.door_bore || "right");
+        }
       }
 
       // Populate modal data grid (fail-soft)
@@ -569,6 +604,11 @@
     if (typeof window.updateBoreVisibility === "function") {
       window.updateBoreVisibility(side);
     }
+
+    // Hinges always opposite bore on single doors
+    if (typeof window.updateHingeVisibility === "function") {
+      window.updateHingeVisibility("single_door", side);
+    }
   }
 
   function initDoorBoreToggle() {
@@ -606,6 +646,106 @@
     } else {
       chooser.style.display = "none";
     }
+  }
+
+  // =========================================
+  // HARDWARE COLOR SELECTOR
+  // =========================================
+
+  /** Build <select> inside #hardware-selector from HARDWARE_COLORS, attach change handler.
+   *  Copies computed styles from #selector-format placeholder, then removes it. */
+  function initHardwareColorSelector() {
+    var container = document.getElementById(HARDWARE_SELECTOR_ID);
+    if (!container) return;
+
+    var colors = window.HARDWARE_COLORS;
+    if (!Array.isArray(colors) || colors.length === 0) return;
+
+    // Copy styles from Webflow placeholder before removing it
+    var placeholder = document.getElementById("selector-format");
+    var styleProps = {};
+    if (placeholder) {
+      var cs = window.getComputedStyle(placeholder);
+      var props = [
+        "fontFamily", "fontSize", "fontWeight", "fontStyle",
+        "lineHeight", "letterSpacing", "textTransform",
+        "color", "backgroundColor",
+        "padding", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+        "margin", "marginTop", "marginRight", "marginBottom", "marginLeft",
+        "border", "borderRadius",
+        "width", "maxWidth", "minWidth",
+        "height", "maxHeight", "minHeight",
+        "textAlign"
+      ];
+      for (var p = 0; p < props.length; p++) {
+        styleProps[props[p]] = cs[props[p]];
+      }
+      placeholder.remove();
+    }
+
+    var sel = document.createElement("select");
+    sel.id = "hardware-color-select";
+
+    // Apply copied styles
+    for (var key in styleProps) {
+      if (styleProps.hasOwnProperty(key)) {
+        sel.style[key] = styleProps[key];
+      }
+    }
+    sel.style.cursor = "pointer";
+
+    for (var i = 0; i < colors.length; i++) {
+      var opt = document.createElement("option");
+      opt.value = colors[i].name;
+      opt.textContent = colors[i].name;
+      sel.appendChild(opt);
+    }
+
+    sel.addEventListener("change", function() {
+      if (currentModalIndex === null) return;
+      var solution = window.comboSolutions[currentModalIndex];
+      if (!solution) return;
+
+      solution.hardware_color = sel.value;
+
+      // Invalidate assembly caches
+      delete solution.assembly_svg;
+      delete solution.assembly_svg_no_muntins;
+
+      // Update hinge color on the live DOM
+      var hex = resolveHardwareHex(sel.value);
+      if (typeof window.updateHingeColor === "function") {
+        window.updateHingeColor(hex);
+      }
+    });
+
+    container.appendChild(sel);
+  }
+
+  /** Show/hide #hardware-color-wrapper and reset hardware color to Chrome on modal open. */
+  function configureHardwareColorForModal(solution) {
+    var wrapper = document.getElementById(HARDWARE_COLOR_WRAPPER_ID);
+    if (!wrapper) return;
+
+    if (solutionHasAnyDoor(solution)) {
+      // Reset solution + selector to Chrome on every modal open
+      solution.hardware_color = "Chrome";
+      solution.assembly_svg = null;
+      solution.assembly_svg_no_muntins = null;
+      wrapper.style.display = "flex";
+
+      var sel = document.getElementById("hardware-color-select");
+      if (sel) sel.value = "Chrome";
+    } else {
+      wrapper.style.display = "none";
+    }
+  }
+
+  /** Show #dbl-door-wrapper only for double_door solutions. */
+  function configureDblDoorWrapperForModal(solution) {
+    var wrapper = document.getElementById(DBL_DOOR_WRAPPER_ID);
+    if (!wrapper) return;
+    wrapper.style.display = solutionHasDoubleDoor(solution) ? "flex" : "none";
   }
 
   // =========================================
@@ -891,6 +1031,9 @@
 
       // Door bore side ("left" | "right" | null)
       door_bore: sol.door_bore ?? null,
+
+      // Hardware color name (e.g., "Chrome"); null until defaulted
+      hardware_color: sol.hardware_color ?? null,
     }));
   }
 
@@ -922,6 +1065,38 @@
       solution.door_bore = defaultSide;
     }
   }
+
+  /** Returns true if solution contains at least one double_door build_object. */
+  function solutionHasDoubleDoor(solution) {
+    var bos = solution && solution.build_objects;
+    if (!Array.isArray(bos)) return false;
+    for (var i = 0; i < bos.length; i++) {
+      var c = String(bos[i] && bos[i].construction || "").trim();
+      if (c === "double_door") return true;
+    }
+    return false;
+  }
+
+  /** Returns true if solution contains any door (single or double). */
+  function solutionHasAnyDoor(solution) {
+    return solutionHasSingleDoor(solution) || solutionHasDoubleDoor(solution);
+  }
+
+  /** Look up hardware hex color from HARDWARE_COLORS by name. Defaults to Chrome. */
+  function resolveHardwareHex(colorName) {
+    var colors = window.HARDWARE_COLORS;
+    if (Array.isArray(colors)) {
+      for (var i = 0; i < colors.length; i++) {
+        if (colors[i].name === colorName) return colors[i].color;
+      }
+      // If name not found, return Chrome
+      for (var j = 0; j < colors.length; j++) {
+        if (colors[j].name === "Chrome") return colors[j].color;
+      }
+    }
+    return "#D7D7D7"; // fallback Chrome hex
+  }
+
 
   // =========================================
   // DOM POPULATION
@@ -1100,6 +1275,7 @@
     initModalBehavior();
     initMuntinToggle();
     initDoorBoreToggle();
+    initHardwareColorSelector();
 
     hideFormBlocker();
 

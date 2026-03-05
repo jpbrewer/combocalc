@@ -45,6 +45,10 @@
  * Outputs (produces):
  *
  * Public API:
+ * - window.HARDWARE_COLORS (Array)
+ *   Each object: { name: string, color: string (hex) }
+ *   Used by calc-combo-results.js and calc-svg-block-builder.js for hinge fill colors.
+ *
  * - window.ASSEMBLY_TEMPLATES (Array)
  *
  * Each template object contains:
@@ -92,7 +96,8 @@
  * -------------------------------------------------------------------------
  *
  * Side Effects:
- * - Assigns global:
+ * - Assigns globals:
+ *     window.HARDWARE_COLORS
  *     window.ASSEMBLY_TEMPLATES
  *
  * - Optional console.log for sanity check.
@@ -132,6 +137,29 @@
  *     - Tolerance increased to 2.00 (from earlier 0.01 in development phase).
  *     - Delivered via CDN bootstrap loader.
  */
+window.HARDWARE_COLORS = [
+  {
+    "name": "Chrome",
+    "color": "#D7D7D7"
+  },
+  {
+    "name": "Satin Nickel",
+    "color": "#B8B8B3"
+  },
+  {
+    "name": "Bright Brass",
+    "color": "#D4AF37"
+  },
+  {
+    "name": "Satin Brass",
+    "color": "#C9A227"
+  },
+  {
+    "name": "Oil-Rubbed Branze",
+    "color": "#4A3B2A"
+  },
+];
+
 window.ASSEMBLY_TEMPLATES = [
   {
     "template": "A",

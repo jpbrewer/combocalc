@@ -134,6 +134,7 @@ Assets / Data:
     - `unit_width` (number or null; decimal inches; from response root or per-solution)
     - `unit_height` (number or null; decimal inches; from response root or per-solution)
     - `door_bore` ("left" | "right" | null; which stile gets the bore hole; defaults per assembly template's `door_bore` value)
+    - `hardware_color` (string | null; hardware color name from `HARDWARE_COLORS`, e.g., "Chrome"; defaults to "Chrome" for doors)
   - Rendering cache keys (added lazily by SVG pipeline):
     - `building_block_svgs` (object; block SVGs with actual rows/cols — muntins on)
     - `building_block_svgs_no_muntins` (object; block SVGs with rows=1, cols=1 — muntins off)
@@ -144,7 +145,7 @@ Assets / Data:
 - **Consumed by:**
   - `calc-combo-results.js` for solutions list rendering and Explore button indexing.
   - `calc-svg-block-builder.js` reads `comboSolutions[index].build_objects` and writes `comboSolutions[index].building_block_svgs`.
-  - `calc-svg-block-assembler.js` reads `comboSolutions[index].assembly_template`, `building_block_svgs`, `unit_width`, `unit_height`, and `door_bore`; writes `assembly_svg`. Exposes `window.updateBoreVisibility(side)` for post-mount bore circle toggling.
+  - `calc-svg-block-assembler.js` reads `comboSolutions[index].assembly_template`, `building_block_svgs`, `unit_width`, `unit_height`, `door_bore`, and `hardware_color`; writes `assembly_svg`. Exposes `window.updateBoreVisibility(side)`, `window.updateHingeVisibility(construction, boreSide)`, and `window.updateHingeColor(hexColor)` for post-mount hardware toggling.
 
 ### `window.job_id`
 - **Name in code:** `window.job_id`
@@ -171,6 +172,12 @@ Assets / Data:
 - **Name in code:** `comboSolutions[index].assembly_svg`
 - **Shape:** Serialized SVG string of the assembled composite.
 - **Source of truth:** Produced by assembler.
+
+### `window.HARDWARE_COLORS` (asset data)
+- **Name in code:** `window.HARDWARE_COLORS`
+- **Shape:** Array of `{ name: string, color: string }` objects (e.g., `{ "name": "Chrome", "color": "#D7D7D7" }`).
+- **Used by:** `calc-combo-results.js` (hardware color selector, hex resolution) and `calc-svg-block-builder.js` (hinge fill color).
+- **Source of truth:** `combo-assembly-templates-json.js`
 
 ### `window.ASSEMBLY_TEMPLATES` (asset data)
 - **Name in code:** `window.ASSEMBLY_TEMPLATES`
@@ -298,8 +305,9 @@ Full contract documentation in webflow-contract.md
    - It opens the modal (`#modal-overlay` display = `flex`) and reads `dataset.solutionIndex`.
    - If `window.build_assembly_svg` is missing, it warns and stops.
    - Configures the door bore chooser: shows `#choose-door-bore` if solution has a single door (defaults `door_bore` per assembly template), hides it otherwise. Sets the bore toggle active class.
+   - Configures the hardware color selector: shows `#hardware-color-wrapper` if solution has any door (single or double), sets the `<select>` to the solution's `hardware_color`. Hides it otherwise.
    - If present, it calls `window.build_assembly_svg(index)` and logs errors if thrown.
-   - After SVG mount, calls `window.updateBoreVisibility(solution.door_bore)` to set bore circle visibility.
+   - After SVG mount, calls `window.updateBoreVisibility(solution.door_bore)` and `window.updateHingeVisibility(doorType, boreSide)` to set bore/hinge visibility.
    - After SVG rendering, calls `populateModalGrid(index)` to populate the modal data grid:
      - Sets opening summary fields (opening_width, opening_height, jamb_depth) from the solution object.
      - Sets icon via `[data-modal-icon="img"]` using the same icon registry resolution.

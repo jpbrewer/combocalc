@@ -243,6 +243,10 @@ Removing fixed height from `#explore` will break layout scaling.
 | `choose-door-bore` | `div`     | Door bore chooser wrapper; normally hidden; shown when solution has single door | `calc-combo-results.js` | Bore chooser not shown; bore defaults to "right" |
 | `door-bore-left`   | `div`     | Door bore "left" selector (class `door-selection-active` when active) | `calc-combo-results.js` | Toggle not bound; bore stays at default side |
 | `door-bore-right`  | `div`     | Door bore "right" selector; default active (class `door-selection-active`) | `calc-combo-results.js` | Toggle not bound; bore stays at default side |
+| `hardware-color-wrapper` | `div` | Hardware color selector wrapper; normally hidden; shown (display:flex) when solution has any door | `calc-combo-results.js` | Hardware selector not shown; hinges use Chrome default |
+| `hardware-selector` | `div`   | Container into which a `<select>` is dynamically created from `HARDWARE_COLORS` | `calc-combo-results.js` | No select rendered; hinges use Chrome default |
+| `selector-format`  | text block | Style placeholder inside `#hardware-selector`; computed styles copied to `<select>`, then element removed at init | `calc-combo-results.js` | Select rendered without Webflow styling |
+| `dbl-door-wrapper` | `div`   | Double door info wrapper; normally hidden; shown (display:flex) only when solution has double_door construction; hidden on modal close | `calc-combo-results.js` | Wrapper not shown; no impact on functionality |
 
 ## Modal data grid elements (inside `#modal-panel`, after `#explore`)
 
