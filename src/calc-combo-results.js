@@ -1106,7 +1106,7 @@
    *  @param {string} [boreSide] - override bore side (used by toggle); falls back to solution.door_bore
    */
   function resolveDoorTypeLabel(solution, context, boreSide) {
-    if (solutionHasDoubleDoor(solution)) return "Double-Hung";
+    if (solutionHasDoubleDoor(solution)) return "Height";
     if (!solutionHasSingleDoor(solution)) return "XX";
     if (context === "listing") return "Single-Hung";
     // modal context: label reflects bore side
@@ -1239,7 +1239,7 @@
       setField(row, "order_dims", rowData.order_dims);
       setField(row, "quantity", rowData.quantity);
       var lnVal = rowData.line_notes != null ? String(rowData.line_notes) : "";
-      setField(row, "line_notes", lnVal.replace("XX", resolveDoorTypeLabel(solution, "listing")));
+      setField(row, "line_notes", lnVal.replace("XX", "Height"));
 
       if (summaryRow && summaryRow.parentElement === rowsParent) {
         rowsParent.insertBefore(row, summaryRow);

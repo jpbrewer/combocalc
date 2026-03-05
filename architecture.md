@@ -161,8 +161,8 @@ Assets / Data:
     - row fields read for display:
       - `row`, `building_block`, `order_dims`, `quantity`, `line_notes`
   - `line_notes` contains an "XX" marker that is replaced client-side:
-    - Listing cards: "Single-Hung" (single_door) or "Double-Hung" (double_door)
-    - Modal: "Left-Hand" / "Right-Hand" (single_door, based on door_bore) or "Double-Hung" (double_door)
+    - Listing cards: always replaced with "Height"
+    - Modal: "Left-Hand" / "Right-Hand" (single_door, based on door_bore) or "Height" (double_door or no door)
     - Bore toggle swaps "Left-Hand" ↔ "Right-Hand" in the modal
 - **Source of truth:** Retrieval payload.
 
