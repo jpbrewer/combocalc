@@ -45,6 +45,10 @@
  * Outputs (produces):
  *
  * Public API:
+ * - window.HARDWARE_COLORS (Array)
+ *   Each object: { name: string, color: string (hex) }
+ *   Used by calc-combo-results.js and calc-svg-block-builder.js for hinge fill colors.
+ *
  * - window.ASSEMBLY_TEMPLATES (Array)
  *
  * Each template object contains:
@@ -55,6 +59,10 @@
  *
  *   description: string
  *     - Human-readable explanation of layout intent.
+ *
+ *   door_bore: "left" | "right"
+ *     - Default bore side for single-door solutions using this template.
+ *     - Consumed by ensureDoorBoreDefault() in calc-combo-results.js.
  *
  *   positions: string[]
  *     - Ordered list of block position keys required by this template.
@@ -88,7 +96,8 @@
  * -------------------------------------------------------------------------
  *
  * Side Effects:
- * - Assigns global:
+ * - Assigns globals:
+ *     window.HARDWARE_COLORS
  *     window.ASSEMBLY_TEMPLATES
  *
  * - Optional console.log for sanity check.
@@ -128,10 +137,34 @@
  *     - Tolerance increased to 2.00 (from earlier 0.01 in development phase).
  *     - Delivered via CDN bootstrap loader.
  */
+window.HARDWARE_COLORS = [
+  {
+    "name": "Chrome",
+    "color": "#D7D7D7"
+  },
+  {
+    "name": "Satin Nickel",
+    "color": "#B8B8B3"
+  },
+  {
+    "name": "Bright Brass",
+    "color": "#D4AF37"
+  },
+  {
+    "name": "Satin Brass",
+    "color": "#C9A227"
+  },
+  {
+    "name": "Oil-Rubbed Branze",
+    "color": "#4A3B2A"
+  },
+];
+
 window.ASSEMBLY_TEMPLATES = [
   {
     "template": "A",
     "description": "Template A: pos5 (transom) stacked above pos2 (door or cased opening).",
+    "door_bore": "left",
     "positions": ["pos2", "pos5"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -142,6 +175,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "AHD",
     "description": "AHD: pos2 with pos5 above it, and pos7 above pos5 (stacked transoms).",
+    "door_bore": "left",
     "positions": ["pos2", "pos5", "pos7"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -154,6 +188,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "BL",
     "description": "assembly_BL: pos1 to the left of pos2.",
+    "door_bore": "left",
     "positions": ["pos1", "pos2"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -163,6 +198,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "BLHD",
     "description": "BLHD: pos1 left of pos2; pos5 spans above pos1+pos2.",
+    "door_bore": "left",
     "positions": ["pos1", "pos2", "pos5"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -174,6 +210,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "BR",
     "description": "assembly_BR: pos3 to the right of pos2.",
+    "door_bore": "right",
     "positions": ["pos2", "pos3"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -183,6 +220,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "BRHD",
     "description": "BRHD: pos2 with pos3 on right; pos5 spans above them.",
+    "door_bore": "right",
     "positions": ["pos2", "pos3", "pos5"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -194,6 +232,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "C",
     "description": "assembly_C: pos1 left of pos2, pos3 right of pos2 (no transoms).",
+    "door_bore": "left",
     "positions": ["pos1", "pos2", "pos3"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -204,6 +243,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "CHD",
     "description": "CHD: pos1 left of pos2 and pos3 right of pos2; pos5 spans above all three.",
+    "door_bore": "left",
     "positions": ["pos1", "pos2", "pos3", "pos5"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -216,6 +256,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "DL",
     "description": "Template DL: pos1 (left sidelight) next to pos2 (main unit), with pos5 (transom) spanning across both.",
+    "door_bore": "left",
     "positions": ["pos1", "pos2", "pos5"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -227,6 +268,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "DLHD",
     "description": "DLHD: pos1 on left of pos2; pos5 spans above them; pos7 spans above pos5.",
+    "door_bore": "left",
     "positions": ["pos1", "pos2", "pos5", "pos7"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -240,6 +282,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "DR",
     "description": "Template DR: pos2 with pos3 to the right, and pos5 (transom) spanning across both.",
+    "door_bore": "right",
     "positions": ["pos2", "pos3", "pos5"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -251,6 +294,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "DRHD",
     "description": "DRHD: pos2 with pos3 on right; pos5 spans above them; pos7 spans above pos5.",
+    "door_bore": "right",
     "positions": ["pos2", "pos3", "pos5", "pos7"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -264,6 +308,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "EL",
     "description": "assembly_EL: pos1 left of pos2; pos4 above pos1; pos5 above pos2.",
+    "door_bore": "left",
     "positions": ["pos1", "pos2", "pos4", "pos5"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -276,6 +321,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "ELHD",
     "description": "ELHD: pos1 on left of pos2; pos6 above pos1; pos5 above pos2; pos7 spans across top.",
+    "door_bore": "left",
     "positions": ["pos1", "pos2", "pos5", "pos6", "pos7"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -289,6 +335,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "ER",
     "description": "assembly_ER: pos3 right of pos2; pos5 above pos2; pos6 above pos3.",
+    "door_bore": "right",
     "positions": ["pos2", "pos3", "pos5", "pos6"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -301,6 +348,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "ERHD",
     "description": "ERHD: pos2 with pos3 on right; pos5 above pos2; pos6 above pos3; pos7 spans across top.",
+    "door_bore": "right",
     "positions": ["pos2", "pos3", "pos5", "pos6", "pos7"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -314,6 +362,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "F",
     "description": "assembly_F: pos1 left of pos2, pos3 right of pos2, pos5 transom spanning across pos1+pos2+pos3.",
+    "door_bore": "left",
     "positions": ["pos1", "pos2", "pos3", "pos5"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -326,6 +375,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "FHD",
     "description": "FHD: pos1|pos2|pos3 with pos5 spanning above them, and pos7 spanning above pos5.",
+    "door_bore": "left",
     "positions": ["pos1", "pos2", "pos3", "pos5", "pos7"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -340,6 +390,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "G",
     "description": "assembly_G: pos1 left of pos2, pos3 right of pos2; pos4 above pos1; pos5 above pos2; pos6 above pos3.",
+    "door_bore": "left",
     "positions": ["pos1", "pos2", "pos3", "pos4", "pos5", "pos6"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -356,6 +407,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "GHD",
     "description": "GHD: pos1|pos2|pos3 with pos4/pos5/pos6 above them, and pos7 spanning across the top.",
+    "door_bore": "left",
     "positions": ["pos1", "pos2", "pos3", "pos4", "pos5", "pos6", "pos7"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
@@ -371,6 +423,7 @@ window.ASSEMBLY_TEMPLATES = [
   {
     "template": "ZHD",
     "description": "ZHD: pos5 transom above pos2.",
+    "door_bore": "left",
     "positions": ["pos2", "pos5"],
     "ops": [
       { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },

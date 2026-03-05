@@ -125,11 +125,20 @@
  *    - door/sidelite/co/double_door are rotated -90° at the end (render_root transform + swapped viewBox dims).
  *    - co hides sash internals (rails/stiles/glass) and suppresses outside_boundary_sash stroke.
  *    - door-like modes hide `jamb_left`.
+ *  - Single-door blocks include two bore circle groups (<g data-bore="left"> and <g data-bore="right">)
+ *    in the sash group. Bore circles: 2.125" diameter, 36" from bottom, 2.375" from door edge (centerline),
+ *    white fill with boundary stroke styling. Visibility is controlled post-mount by window.updateBoreVisibility().
+ *  - Door hinge rendering (single_door and double_door):
+ *    - Two groups per leaf: <g data-hinge="left"> and <g data-hinge="right"> (leaf2 uses data-hinge-leaf2).
+ *    - Each group contains 3 filled rects (0.5" wide x 3.5" tall) at 7", 38", 69" from door bottom.
+ *    - Hinges straddle the door edge: inner edge on sash boundary, 0.5" protruding into jamb.
+ *    - Fill color from solution.hardware_color (resolved via HARDWARE_COLORS); default Chrome (#D7D7D7).
+ *    - Visibility controlled post-mount by window.updateHingeVisibility().
  *  - double_door behavior:
  *    - Upstream width is treated as TOTAL combined width; per-leaf input width is divided by 2.
  *    - Two leaves are stacked vertically in pre-rotation space with `MEETING_GAP` between them.
  *    - Leaf2 base geometry (rails/stiles/boundary + glass) is cloned and pattern-filled explicitly.
- *  - Boundary strokes are non-scaling (`vector-effect: non-scaling-stroke`) and use BOUNDARY_STROKE_OPACITY (default 0.25).
+ *  - Boundary strokes are non-scaling (`vector-effect: non-scaling-stroke`) and use BOUNDARY_STROKE_OPACITY (default 0.50).
  *
  * Version Notes:
  *  - v0: Browser-only drop-in renderer with external PNG patterns + output stored on `window.comboSolutions[index]`.
@@ -165,7 +174,7 @@ const PATTERN_TILE = {
 // Boundary styling
 const BOUNDARY_STROKE_PX = 1;
 const BOUNDARY_STROKE_COLOR = "#000000";
-const BOUNDARY_STROKE_OPACITY = 0.25;
+const BOUNDARY_STROKE_OPACITY = 0.50;
 
 // Units: if build_objects are inches, set 96. If already in SVG units, set 1.
 const PX_PER_INCH = 96;
@@ -474,7 +483,7 @@ function cloneAndTranslate(el, newId, yOff) {
 // ---------------------------------------------
 
 // ---------------- CORE RENDER (one block -> svg string) ----------------
-function renderOneBlockToSvgString(block, patternUrls) {
+function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
   if (!window.WINDOW_TYPE_A_SVG_TEXT || typeof window.WINDOW_TYPE_A_SVG_TEXT !== "string") {
     throw new Error("window.WINDOW_TYPE_A_SVG_TEXT is missing or not a string.");
   }
@@ -686,6 +695,107 @@ function renderOneBlockToSvgString(block, patternUrls) {
   bringToFront(unitBoundary);
   bringToFront(sashBoundary);
 
+  // ---- Door bore circles (single door only) ----
+  // Both left and right bores are created; visibility is set post-mount
+  // by window.updateBoreVisibility(). In pre-rotation coordinates:
+  //   final bottom = pre-rot left (x axis)
+  //   final left stile = pre-rot top (y axis)
+  //   final right stile = pre-rot bottom (y axis)
+  if (CONSTRUCTION === "door") {
+    var BORE_DIAMETER_PX = 2.125 * PX_PER_INCH;  // 204
+    var BORE_RADIUS = BORE_DIAMETER_PX / 2;       // 102
+    var BORE_FROM_BOTTOM_PX = 36 * PX_PER_INCH;   // 3456
+    var BORE_FROM_EDGE_PX = 2.375 * PX_PER_INCH;  // 228
+
+    // Pre-rotation: 36" from bottom = 36" from left edge (x)
+    var boreCx = sx + BORE_FROM_BOTTOM_PX;
+    // Right bore: 2.375" from outside edge of right stile; in pre-rot, right stile = bottom (y near sy+LEAF_HEIGHT)
+    var boreRightCy = sy + LEAF_HEIGHT - BORE_FROM_EDGE_PX;
+    // Left bore: 2.375" from outside edge of left stile; in pre-rot, left stile = top (y near sy)
+    var boreLeftCy = sy + BORE_FROM_EDGE_PX;
+
+    var svgNsBore = "http://www.w3.org/2000/svg";
+
+    var boreRightG = doc.createElementNS(svgNsBore, "g");
+    boreRightG.setAttribute("data-bore", "right");
+    var boreRightCircle = doc.createElementNS(svgNsBore, "circle");
+    boreRightCircle.setAttribute("cx", String(boreCx));
+    boreRightCircle.setAttribute("cy", String(boreRightCy));
+    boreRightCircle.setAttribute("r", String(BORE_RADIUS));
+    boreRightCircle.setAttribute("fill", "white");
+    boreRightCircle.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
+    boreRightCircle.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
+    boreRightCircle.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+    boreRightCircle.setAttribute("vector-effect", "non-scaling-stroke");
+    boreRightG.appendChild(boreRightCircle);
+    sashGroup.appendChild(boreRightG);
+
+    var boreLeftG = doc.createElementNS(svgNsBore, "g");
+    boreLeftG.setAttribute("data-bore", "left");
+    var boreLeftCircle = doc.createElementNS(svgNsBore, "circle");
+    boreLeftCircle.setAttribute("cx", String(boreCx));
+    boreLeftCircle.setAttribute("cy", String(boreLeftCy));
+    boreLeftCircle.setAttribute("r", String(BORE_RADIUS));
+    boreLeftCircle.setAttribute("fill", "white");
+    boreLeftCircle.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
+    boreLeftCircle.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
+    boreLeftCircle.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+    boreLeftCircle.setAttribute("vector-effect", "non-scaling-stroke");
+    boreLeftG.appendChild(boreLeftCircle);
+    sashGroup.appendChild(boreLeftG);
+  }
+
+  // ---- Door hinges (single_door and double_door) ----
+  // Rendered as solid-fill rectangles on both stile sides; visibility set post-mount
+  // by window.updateHingeVisibility(). In pre-rotation coordinates:
+  //   hinge "tall" (3.5") runs along x-axis, "wide" (0.5") along y-axis
+  //   left-stile hinges protrude above sy (into jamb); right-stile below sy+LEAF_HEIGHT
+  if (CONSTRUCTION === "door" || IS_DOUBLE_DOOR) {
+    var svgNsHinge = "http://www.w3.org/2000/svg";
+    var HINGE_TALL_PX = 3.5 * PX_PER_INCH;   // 336px along x (pre-rot)
+    var HINGE_WIDE_PX = 0.5 * PX_PER_INCH;    // 48px along y (pre-rot)
+    var HINGE_OFFSETS = [
+      7 * PX_PER_INCH,    // 672px — 7" from bottom
+      38 * PX_PER_INCH,   // 3648px — 38" from bottom
+      69 * PX_PER_INCH    // 6624px — 69" from bottom
+    ];
+    var hingeFill = hardwareHex || "#D7D7D7";
+
+    // Helper: create a group of 3 hinge rects for one stile side
+    function createHingeGroup(attrName, attrValue, hingeX, hingeY) {
+      var g = doc.createElementNS(svgNsHinge, "g");
+      g.setAttribute(attrName, attrValue);
+      for (var hi = 0; hi < HINGE_OFFSETS.length; hi++) {
+        var rect = doc.createElementNS(svgNsHinge, "rect");
+        rect.setAttribute("x", String(hingeX + HINGE_OFFSETS[hi]));
+        rect.setAttribute("y", String(hingeY));
+        rect.setAttribute("width", String(HINGE_TALL_PX));
+        rect.setAttribute("height", String(HINGE_WIDE_PX));
+        rect.setAttribute("fill", hingeFill);
+        rect.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
+        rect.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
+        rect.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+        rect.setAttribute("vector-effect", "non-scaling-stroke");
+        g.appendChild(rect);
+      }
+      return g;
+    }
+
+    // Append to renderRootEl (not sashGroup) so hinges render on top of jambs
+    // Leaf1 hinges (both single_door and first leaf of double_door)
+    // Left stile (pre-rot top): protrudes above sash boundary into jamb
+    renderRootEl.appendChild(createHingeGroup("data-hinge", "left", sx, sy - HINGE_WIDE_PX));
+    // Right stile (pre-rot bottom): protrudes below sash boundary into jamb
+    renderRootEl.appendChild(createHingeGroup("data-hinge", "right", sx, sy + LEAF_HEIGHT));
+
+    // Leaf2 hinges (double_door only)
+    if (IS_DOUBLE_DOOR) {
+      var yOff2 = LEAF_PITCH_Y;
+      renderRootEl.appendChild(createHingeGroup("data-hinge-leaf2", "left", sx, sy + yOff2 - HINGE_WIDE_PX));
+      renderRootEl.appendChild(createHingeGroup("data-hinge-leaf2", "right", sx, sy + yOff2 + LEAF_HEIGHT));
+    }
+  }
+
   // Hide prototypes in final output
   hideEl(vProto);
   hideEl(hProto);
@@ -868,6 +978,15 @@ window.build_block_svgs = function build_block_svgs(index, muntins) {
 
   const patternUrls = getPatternUrlsFromDom();
 
+  // Resolve hardware color for hinge rendering
+  var hwHex = "#D7D7D7"; // default Chrome
+  var hwName = solution.hardware_color;
+  if (hwName && window.HARDWARE_COLORS && Array.isArray(window.HARDWARE_COLORS)) {
+    for (var hi = 0; hi < window.HARDWARE_COLORS.length; hi++) {
+      if (window.HARDWARE_COLORS[hi].name === hwName) { hwHex = window.HARDWARE_COLORS[hi].color; break; }
+    }
+  }
+
   solution[cacheKey] = {};
 
   for (const block of buildObjects) {
@@ -877,7 +996,7 @@ window.build_block_svgs = function build_block_svgs(index, muntins) {
     if (!useMuntins) {
       renderBlock = Object.assign({}, block, { rows: 1, cols: 1 });
     }
-    const svgString = renderOneBlockToSvgString(renderBlock, patternUrls);
+    const svgString = renderOneBlockToSvgString(renderBlock, patternUrls, hwHex);
     solution[cacheKey][pos] = svgString;
   }
 

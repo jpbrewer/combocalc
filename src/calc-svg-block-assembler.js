@@ -96,8 +96,24 @@
  * Outputs (produces):
  *
  * Public API:
- * - Global function exposed:
+ * - Global functions exposed:
  *     build_assembly_svg(index, muntins)
+ *     updateBoreVisibility(boreSide)
+ *       - boreSide ("left"|"right"): sets display on [data-bore] groups in the mounted #explore SVG.
+ *       - Called automatically after every mount (cached or fresh) using solution.door_bore || "right".
+ *       - Also called by calc-combo-results.js door bore toggle for instant DOM-only switching.
+ *
+ *     updateHingeVisibility(construction, boreSide)
+ *       - construction ("single_door"|"double_door"): determines suppression rules.
+ *       - boreSide ("left"|"right"): for single_door, hinges shown opposite bore side.
+ *       - For double_door: leaf1 left hinges + leaf2 right hinges always shown (outer perimeter).
+ *       - Called automatically after every mount and by bore toggle for instant DOM switching.
+ *
+ *     updateHingeColor(hexColor)
+ *       - hexColor (string): CSS hex color to apply to all hinge rect fills.
+ *       - Called automatically after every mount and by hardware color selector change handler.
+ *
+ *     build_assembly_svg params:
  *       - index (number): position in window.comboSolutions.
  *       - muntins (boolean, optional): when false, renders with rows=1/cols=1 (no muntins).
  *         Defaults to true (use actual rows/cols) if omitted or undefined.
@@ -196,6 +212,95 @@
  *     - Writes assembly_svg back onto the solution object.
  *     - Renders result as inline DOM SVG inside #explore.
  */
+/**
+ * Sets the visibility of door bore circles in the mounted SVG inside #explore.
+ * @param {string} boreSide - "left" or "right"
+ */
+function updateBoreVisibility(boreSide) {
+  var explore = document.getElementById("explore");
+  if (!explore) return;
+  var boreLeft = explore.querySelector('[data-bore="left"]');
+  var boreRight = explore.querySelector('[data-bore="right"]');
+  if (boreLeft) boreLeft.style.display = (boreSide === "left") ? "" : "none";
+  if (boreRight) boreRight.style.display = (boreSide === "right") ? "" : "none";
+}
+window.updateBoreVisibility = updateBoreVisibility;
+
+/**
+ * Sets the visibility of door hinge groups in the mounted SVG inside #explore.
+ * @param {string} construction - "single_door" or "double_door"
+ * @param {string} boreSide - "left" or "right" (used for single_door to place hinges opposite bore)
+ */
+function updateHingeVisibility(construction, boreSide) {
+  var explore = document.getElementById("explore");
+  if (!explore) return;
+
+  var hingeLeft = explore.querySelector('[data-hinge="left"]');
+  var hingeRight = explore.querySelector('[data-hinge="right"]');
+
+  if (construction === "single_door") {
+    // Hinges opposite the bore/handle side
+    if (hingeLeft) hingeLeft.style.display = (boreSide === "right") ? "" : "none";
+    if (hingeRight) hingeRight.style.display = (boreSide === "left") ? "" : "none";
+  } else if (construction === "double_door") {
+    // Leaf1 (left door after rotation): show left hinges only
+    if (hingeLeft) hingeLeft.style.display = "";
+    if (hingeRight) hingeRight.style.display = "none";
+    // Leaf2 (right door after rotation): show right hinges only
+    var hingeLeft2 = explore.querySelector('[data-hinge-leaf2="left"]');
+    var hingeRight2 = explore.querySelector('[data-hinge-leaf2="right"]');
+    if (hingeLeft2) hingeLeft2.style.display = "none";
+    if (hingeRight2) hingeRight2.style.display = "";
+  }
+}
+window.updateHingeVisibility = updateHingeVisibility;
+
+/**
+ * Updates the fill color of all hinge rects in the mounted SVG inside #explore.
+ * @param {string} hexColor - CSS hex color (e.g., "#D7D7D7")
+ */
+function updateHingeColor(hexColor) {
+  var explore = document.getElementById("explore");
+  if (!explore) return;
+  var rects = explore.querySelectorAll('[data-hinge] rect, [data-hinge-leaf2] rect');
+  for (var i = 0; i < rects.length; i++) {
+    rects[i].setAttribute("fill", hexColor);
+  }
+}
+window.updateHingeColor = updateHingeColor;
+
+/**
+ * Resolves hardware hex color from HARDWARE_COLORS by name. Defaults to Chrome.
+ * Used by the assembler after mount to ensure correct hinge color.
+ */
+function resolveHardwareHexAssembler(colorName) {
+  var colors = window.HARDWARE_COLORS;
+  if (Array.isArray(colors)) {
+    for (var i = 0; i < colors.length; i++) {
+      if (colors[i].name === colorName) return colors[i].color;
+    }
+    for (var j = 0; j < colors.length; j++) {
+      if (colors[j].name === "Chrome") return colors[j].color;
+    }
+  }
+  return "#D7D7D7";
+}
+
+/**
+ * Determines door type from solution build_objects.
+ * Returns "single_door", "double_door", or null.
+ */
+function getDoorType(solution) {
+  if (!solution || !Array.isArray(solution.build_objects)) return null;
+  var doorType = null;
+  for (var i = 0; i < solution.build_objects.length; i++) {
+    var c = String(solution.build_objects[i].construction || "").trim();
+    if (c === "double_door") return "double_door";
+    if (c === "single_door" || c === "single_door_only" || c === "single") doorType = "single_door";
+  }
+  return doorType;
+}
+
 function build_assembly_svg(index, muntins) {
   try {
     // 1) Validate globals / index
@@ -229,6 +334,14 @@ function build_assembly_svg(index, muntins) {
       const cachedDoc = new DOMParser().parseFromString(solution[assemblyCacheKey], "image/svg+xml");
       const cachedSvg = document.importNode(cachedDoc.documentElement, true);
       cachedExplore.appendChild(cachedSvg);
+
+      updateBoreVisibility(solution.door_bore || "right");
+
+      var cachedDoorType = getDoorType(solution);
+      if (cachedDoorType) {
+        updateHingeVisibility(cachedDoorType, solution.door_bore || "right");
+        updateHingeColor(resolveHardwareHexAssembler(solution.hardware_color));
+      }
 
       return { svgElement: cachedSvg, svgString: solution[assemblyCacheKey], placements: null, template: null };
     }
@@ -414,6 +527,14 @@ function build_assembly_svg(index, muntins) {
 
     while (explore.firstChild) explore.removeChild(explore.firstChild);
     explore.appendChild(root);
+
+    updateBoreVisibility(solution.door_bore || "right");
+
+    var freshDoorType = getDoorType(solution);
+    if (freshDoorType) {
+      updateHingeVisibility(freshDoorType, solution.door_bore || "right");
+      updateHingeColor(resolveHardwareHexAssembler(solution.hardware_color));
+    }
 
     return { svgElement: root, svgString, placements, template: tpl };
   } catch (err) {

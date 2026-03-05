@@ -40,6 +40,9 @@
  *    - #modal-close             (close button; closes modal)
  *    - #no-muntin              (text block; muntin toggle "off" — default active on modal open)
  *    - #yes-muntin             (text block; muntin toggle "on" — shows actual rows/cols muntins)
+ *    - #choose-door-bore       (div; door bore chooser wrapper — hidden by default; shown when solution has single door)
+ *    - #door-bore-left         (clickable element; selects left-side bore)
+ *    - #door-bore-right        (clickable element; selects right-side bore — default active)
  *  - Selectors / structural assumptions (inferred from code):
  *    - .solutions-list                  (container list where solution cards are appended)
  *    - [data-solution-card=”template”]  (template “solution card” to clone per solution)
@@ -86,6 +89,8 @@
  *      - meta (object; optional)
  *      - opening_width, opening_height, jamb_depth (optional; per-solution override of root values)
  *      - unit_width, unit_height (optional; decimal inches; used for SVG dimension annotations)
+ *      - door_bore ("left" | "right" | null; which stile gets the bore hole; defaults per assembly template's door_bore value)
+ *      - hardware_color (string | null; hardware color name e.g. "Chrome"; defaults to "Chrome" for solutions with doors)
  *  - Required external function (called on Explore click):
  *    - window.build_assembly_svg(index) must exist for rendering; if missing, current behavior logs a warning and continues.
  *
@@ -105,6 +110,14 @@
  *  - Calls (requires) window.build_assembly_svg(index, muntins) on Explore click (muntins=false by default).
  *  - Muntin toggle: #no-muntin / #yes-muntin click handlers call build_assembly_svg with muntins false/true.
  *    CSS class "muntin-selection-active" is toggled on the active button.
+ *  - Door bore toggle: #door-bore-left / #door-bore-right click handlers update solution.door_bore,
+ *    invalidate assembly caches, and call window.updateBoreVisibility(side) + window.updateHingeVisibility()
+ *    for instant DOM toggle. CSS class "door-selection-active" is toggled on the active button.
+ *    #choose-door-bore is shown (display:flex) only when the solution has a single_door build_object.
+ *    Also updates door_unit_height labels in the modal grid (Left-Hand ↔ Right-Hand).
+ *  - Hardware color selector: a <select> populated from window.HARDWARE_COLORS is created inside
+ *    #hardware-selector. On change, updates solution.hardware_color and calls window.updateHingeColor(hex).
+ *    #hardware-color-wrapper is shown (display:flex) when solution has any door (single or double).
  *
  *  DOM Mutations:
  *  - Shows/hides:
@@ -119,6 +132,8 @@
  *      - cloning template card per solution
  *      - cloning row template per position key in POS_ORDER
  *      - populating [data-field="..."] nodes with solution_grid values
+ *      - door_unit_height "XX" marker replaced: "Single-Hung"/"Double-Hung" in listing cards,
+ *        "Left-Hand"/"Right-Hand" in modal (toggles with bore side)
  *      - cloning summary row for unit_notes (above position rows) and solution_notes (below)
  *      - setting icon <img data-field="icon"> src via ICON_MAP (or fallback resolution)
  *    - Modal overlay display toggled by openModal/closeModal.
@@ -129,7 +144,7 @@
  *
  *  Data Produced:
  *  - Normalized solution objects stored in window.comboSolutions:
- *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta, opening_width, opening_height, jamb_depth }
+ *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta, opening_width, opening_height, jamb_depth, door_bore }
  *  - ICON_MAP (internal) created from #icon_registry: filename → Webflow asset URL.
  *
  * Load Order / Dependencies:
@@ -207,8 +222,18 @@
   const YES_MUNTIN_ID = "yes-muntin";
   const MUNTIN_ACTIVE_CLASS = "muntin-selection-active";
 
+  const CHOOSE_DOOR_BORE_ID = "choose-door-bore";
+  const DOOR_BORE_LEFT_ID = "door-bore-left";
+  const DOOR_BORE_RIGHT_ID = "door-bore-right";
+  const DOOR_BORE_ACTIVE_CLASS = "door-selection-active";
+
+  const HARDWARE_COLOR_WRAPPER_ID = "hardware-color-wrapper";
+  const HARDWARE_SELECTOR_ID = "hardware-selector";
+  const DBL_DOOR_WRAPPER_ID = "dbl-door-wrapper";
+
   var currentModalIndex = null;
   var currentMuntinState = false;
+  var currentDoorBore = "right";
 
   const REQUEST_ENDPOINT_URL =
     "https://api.transomsdirect.com/api:xyi0dc0X/bc_combo_solution_request";
@@ -381,7 +406,25 @@
     const overlay = document.getElementById(MODAL_OVERLAY_ID);
     if (overlay) overlay.style.display = "flex";
   }
+  function resetHardwareColorToChrome() {
+    // Reset solution object if one is active
+    if (currentModalIndex !== null && window.comboSolutions) {
+      var solution = window.comboSolutions[currentModalIndex];
+      if (solution) {
+        solution.hardware_color = "Chrome";
+        solution.assembly_svg = null;
+        solution.assembly_svg_no_muntins = null;
+      }
+    }
+    // Reset the on-screen selector
+    var sel = document.getElementById("hardware-color-select");
+    if (sel) sel.value = "Chrome";
+  }
+
   function closeModal() {
+    resetHardwareColorToChrome();
+    var dblWrapper = document.getElementById(DBL_DOOR_WRAPPER_ID);
+    if (dblWrapper) dblWrapper.style.display = "none";
     const overlay = document.getElementById(MODAL_OVERLAY_ID);
     if (overlay) overlay.style.display = "none";
     clearModalGridRows();
@@ -417,6 +460,12 @@
       currentModalIndex = idx;
       setMuntinToggleState(false);
 
+      // Configure door bore chooser and hardware color selector
+      var solution = window.comboSolutions[idx];
+      configureDoorBoreForModal(solution);
+      configureHardwareColorForModal(solution);
+      configureDblDoorWrapperForModal(solution);
+
       if (typeof window.build_assembly_svg !== "function") {
         console.warn("build_assembly_svg(index) is not defined yet.");
         return;
@@ -425,6 +474,18 @@
         window.build_assembly_svg(idx, false);
       } catch (err) {
         console.error("build_assembly_svg failed:", err);
+      }
+
+      // Set bore and hinge visibility on the mounted SVG
+      if (solution && typeof window.updateBoreVisibility === "function") {
+        window.updateBoreVisibility(solution.door_bore || "right");
+      }
+      if (solution && typeof window.updateHingeVisibility === "function") {
+        var doorType = solutionHasDoubleDoor(solution) ? "double_door"
+                     : solutionHasSingleDoor(solution) ? "single_door" : null;
+        if (doorType) {
+          window.updateHingeVisibility(doorType, solution.door_bore || "right");
+        }
       }
 
       // Populate modal data grid (fail-soft)
@@ -511,6 +572,186 @@
         renderMuntinVersion(true);
       });
     }
+  }
+
+  // =========================================
+  // DOOR BORE TOGGLE
+  // =========================================
+  function setDoorBoreToggleState(side) {
+    currentDoorBore = side;
+    var leftBtn = document.getElementById(DOOR_BORE_LEFT_ID);
+    var rightBtn = document.getElementById(DOOR_BORE_RIGHT_ID);
+
+    if (leftBtn) {
+      if (side === "left") leftBtn.classList.add(DOOR_BORE_ACTIVE_CLASS);
+      else leftBtn.classList.remove(DOOR_BORE_ACTIVE_CLASS);
+    }
+    if (rightBtn) {
+      if (side === "right") rightBtn.classList.add(DOOR_BORE_ACTIVE_CLASS);
+      else rightBtn.classList.remove(DOOR_BORE_ACTIVE_CLASS);
+    }
+  }
+
+  function applyDoorBoreToggle(side) {
+    if (currentModalIndex === null) return;
+    var solution = window.comboSolutions[currentModalIndex];
+    if (!solution) return;
+
+    solution.door_bore = side;
+
+    // Invalidate assembly caches so next full render re-serializes with correct state
+    delete solution.assembly_svg;
+    delete solution.assembly_svg_no_muntins;
+
+    // Update the live mounted SVG directly (no full re-render needed)
+    if (typeof window.updateBoreVisibility === "function") {
+      window.updateBoreVisibility(side);
+    }
+
+    // Hinges always opposite bore on single doors
+    if (typeof window.updateHingeVisibility === "function") {
+      window.updateHingeVisibility("single_door", side);
+    }
+
+    // Update door type label in modal grid (Left-Hand ↔ Right-Hand)
+    updateDoorTypeLabelsInModal(side);
+  }
+
+  function initDoorBoreToggle() {
+    var leftBtn = document.getElementById(DOOR_BORE_LEFT_ID);
+    var rightBtn = document.getElementById(DOOR_BORE_RIGHT_ID);
+
+    if (leftBtn) {
+      leftBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        if (currentDoorBore === "left") return;
+        setDoorBoreToggleState("left");
+        applyDoorBoreToggle("left");
+      });
+    }
+
+    if (rightBtn) {
+      rightBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        if (currentDoorBore === "right") return;
+        setDoorBoreToggleState("right");
+        applyDoorBoreToggle("right");
+      });
+    }
+  }
+
+  /** Show/hide #choose-door-bore and set toggle to match solution. */
+  function configureDoorBoreForModal(solution) {
+    var chooser = document.getElementById(CHOOSE_DOOR_BORE_ID);
+    if (!chooser) return;
+
+    if (solutionHasSingleDoor(solution)) {
+      ensureDoorBoreDefault(solution);
+      chooser.style.display = "flex";
+      setDoorBoreToggleState(solution.door_bore);
+    } else {
+      chooser.style.display = "none";
+    }
+  }
+
+  // =========================================
+  // HARDWARE COLOR SELECTOR
+  // =========================================
+
+  /** Build <select> inside #hardware-selector from HARDWARE_COLORS, attach change handler.
+   *  Copies computed styles from #selector-format placeholder, then removes it. */
+  function initHardwareColorSelector() {
+    var container = document.getElementById(HARDWARE_SELECTOR_ID);
+    if (!container) return;
+
+    var colors = window.HARDWARE_COLORS;
+    if (!Array.isArray(colors) || colors.length === 0) return;
+
+    // Copy styles from Webflow placeholder before removing it
+    var placeholder = document.getElementById("selector-format");
+    var styleProps = {};
+    if (placeholder) {
+      var cs = window.getComputedStyle(placeholder);
+      var props = [
+        "fontFamily", "fontSize", "fontWeight", "fontStyle",
+        "lineHeight", "letterSpacing", "textTransform",
+        "color", "backgroundColor",
+        "padding", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+        "margin", "marginTop", "marginRight", "marginBottom", "marginLeft",
+        "border", "borderRadius",
+        "width", "maxWidth", "minWidth",
+        "height", "maxHeight", "minHeight",
+        "textAlign"
+      ];
+      for (var p = 0; p < props.length; p++) {
+        styleProps[props[p]] = cs[props[p]];
+      }
+      placeholder.remove();
+    }
+
+    var sel = document.createElement("select");
+    sel.id = "hardware-color-select";
+
+    // Apply copied styles
+    for (var key in styleProps) {
+      if (styleProps.hasOwnProperty(key)) {
+        sel.style[key] = styleProps[key];
+      }
+    }
+    sel.style.cursor = "pointer";
+
+    for (var i = 0; i < colors.length; i++) {
+      var opt = document.createElement("option");
+      opt.value = colors[i].name;
+      opt.textContent = colors[i].name;
+      sel.appendChild(opt);
+    }
+
+    sel.addEventListener("change", function() {
+      if (currentModalIndex === null) return;
+      var solution = window.comboSolutions[currentModalIndex];
+      if (!solution) return;
+
+      solution.hardware_color = sel.value;
+
+      // Invalidate assembly caches
+      delete solution.assembly_svg;
+      delete solution.assembly_svg_no_muntins;
+
+      // Update hinge color on the live DOM
+      var hex = resolveHardwareHex(sel.value);
+      if (typeof window.updateHingeColor === "function") {
+        window.updateHingeColor(hex);
+      }
+    });
+
+    container.appendChild(sel);
+  }
+
+  /** Show/hide #hardware-color-wrapper and reset hardware color to Chrome on modal open. */
+  function configureHardwareColorForModal(solution) {
+    var wrapper = document.getElementById(HARDWARE_COLOR_WRAPPER_ID);
+    if (!wrapper) return;
+
+    if (solutionHasAnyDoor(solution)) {
+      // Reset solution + selector to Chrome on every modal open
+      solution.hardware_color = "Chrome";
+      solution.assembly_svg = null;
+      solution.assembly_svg_no_muntins = null;
+      wrapper.style.display = "flex";
+
+      var sel = document.getElementById("hardware-color-select");
+      if (sel) sel.value = "Chrome";
+    } else {
+      wrapper.style.display = "none";
+    }
+  }
+
+  /** Show #dbl-door-wrapper only for double_door solutions. */
+  function configureDblDoorWrapperForModal(solution) {
+    var wrapper = document.getElementById(DBL_DOOR_WRAPPER_ID);
+    if (!wrapper) return;
+    wrapper.style.display = solutionHasDoubleDoor(solution) ? "flex" : "none";
   }
 
   // =========================================
@@ -650,7 +891,8 @@
       setField(row, "order_dims",       rowData.order_dims);
       setField(row, "quantity",         rowData.quantity);
       setField(row, "door_unit_width",  rowData.door_unit_width);
-      setField(row, "door_unit_height", rowData.door_unit_height);
+      var duhVal = rowData.door_unit_height != null ? String(rowData.door_unit_height) : "";
+      setField(row, "door_unit_height", duhVal.replace("XX", resolveDoorTypeLabel(sol, "modal")));
 
       if (notesRow && notesRow.parentElement === rowContainer) {
         rowContainer.insertBefore(row, notesRow);
@@ -793,8 +1035,102 @@
       // Unit dimensions for SVG dimension annotations
       unit_width:     sol.unit_width     ?? rootOpening.unit_width,
       unit_height:    sol.unit_height    ?? rootOpening.unit_height,
+
+      // Door bore side ("left" | "right" | null)
+      door_bore: sol.door_bore ?? null,
+
+      // Hardware color name (e.g., "Chrome"); null until defaulted
+      hardware_color: sol.hardware_color ?? null,
     }));
   }
+
+  /** Returns true if solution contains at least one single_door build_object. */
+  function solutionHasSingleDoor(solution) {
+    var bos = solution && solution.build_objects;
+    if (!Array.isArray(bos)) return false;
+    for (var i = 0; i < bos.length; i++) {
+      var c = String(bos[i] && bos[i].construction || "").trim();
+      if (c === "single_door" || c === "single_door_only" || c === "single") return true;
+    }
+    return false;
+  }
+
+  /** Default door_bore for solutions with a single door, using the assembly template's door_bore value. */
+  function ensureDoorBoreDefault(solution) {
+    if (!solution) return;
+    if (!solution.door_bore && solutionHasSingleDoor(solution)) {
+      var defaultSide = "right";
+      var tplName = solution.assembly_template;
+      if (tplName && window.ASSEMBLY_TEMPLATES) {
+        for (var i = 0; i < window.ASSEMBLY_TEMPLATES.length; i++) {
+          if (window.ASSEMBLY_TEMPLATES[i].template === tplName) {
+            defaultSide = window.ASSEMBLY_TEMPLATES[i].door_bore || "right";
+            break;
+          }
+        }
+      }
+      solution.door_bore = defaultSide;
+    }
+  }
+
+  /** Returns true if solution contains at least one double_door build_object. */
+  function solutionHasDoubleDoor(solution) {
+    var bos = solution && solution.build_objects;
+    if (!Array.isArray(bos)) return false;
+    for (var i = 0; i < bos.length; i++) {
+      var c = String(bos[i] && bos[i].construction || "").trim();
+      if (c === "double_door") return true;
+    }
+    return false;
+  }
+
+  /** Returns true if solution contains any door (single or double). */
+  function solutionHasAnyDoor(solution) {
+    return solutionHasSingleDoor(solution) || solutionHasDoubleDoor(solution);
+  }
+
+  /** Resolve the door type label to replace the "XX" marker in door_unit_height.
+   *  @param {object} solution
+   *  @param {"listing"|"modal"} context - "listing" for solution cards, "modal" for Explore
+   *  @param {string} [boreSide] - override bore side (used by toggle); falls back to solution.door_bore
+   */
+  function resolveDoorTypeLabel(solution, context, boreSide) {
+    if (solutionHasDoubleDoor(solution)) return "Double-Hung";
+    if (!solutionHasSingleDoor(solution)) return "XX";
+    if (context === "listing") return "Single-Hung";
+    // modal context: label reflects bore side
+    var side = boreSide || solution.door_bore || "right";
+    return (side === "left") ? "Left-Hand" : "Right-Hand";
+  }
+
+  /** Update door_unit_height labels in the modal grid when bore side toggles.
+   *  Swaps "Left-Hand" ↔ "Right-Hand" in all modal [data-field="door_unit_height"] elements. */
+  function updateDoorTypeLabelsInModal(side) {
+    var panel = document.getElementById(MODAL_PANEL_ID);
+    if (!panel) return;
+    var duhEls = panel.querySelectorAll('[data-field="door_unit_height"]');
+    var newLabel = (side === "left") ? "Left-Hand" : "Right-Hand";
+    var oldLabel = (side === "left") ? "Right-Hand" : "Left-Hand";
+    for (var i = 0; i < duhEls.length; i++) {
+      duhEls[i].textContent = duhEls[i].textContent.replace(oldLabel, newLabel);
+    }
+  }
+
+  /** Look up hardware hex color from HARDWARE_COLORS by name. Defaults to Chrome. */
+  function resolveHardwareHex(colorName) {
+    var colors = window.HARDWARE_COLORS;
+    if (Array.isArray(colors)) {
+      for (var i = 0; i < colors.length; i++) {
+        if (colors[i].name === colorName) return colors[i].color;
+      }
+      // If name not found, return Chrome
+      for (var j = 0; j < colors.length; j++) {
+        if (colors[j].name === "Chrome") return colors[j].color;
+      }
+    }
+    return "#D7D7D7"; // fallback Chrome hex
+  }
+
 
   // =========================================
   // DOM POPULATION
@@ -862,7 +1198,7 @@
     if (rowsParent) rowsParent.insertBefore(clone, rowsParent.firstChild);
   }
 
-  function buildRowsInCard(card, solutionGrid) {
+  function buildRowsInCard(card, solutionGrid, solution) {
     const rowTemplate = card.querySelector(ROW_TEMPLATE_SELECTOR);
     if (!rowTemplate) return;
 
@@ -892,7 +1228,8 @@
       setField(row, "order_dims", rowData.order_dims);
       setField(row, "quantity", rowData.quantity);
       setField(row, "door_unit_width", rowData.door_unit_width);
-      setField(row, "door_unit_height", rowData.door_unit_height);
+      var duhVal = rowData.door_unit_height != null ? String(rowData.door_unit_height) : "";
+      setField(row, "door_unit_height", duhVal.replace("XX", resolveDoorTypeLabel(solution, "listing")));
 
       if (summaryRow && summaryRow.parentElement === rowsParent) {
         rowsParent.insertBefore(row, summaryRow);
@@ -935,7 +1272,7 @@
       stripWebflowInteractionIds(card);
 
       setIcon(card, sol.icon);
-      buildRowsInCard(card, sol.solution_grid);
+      buildRowsInCard(card, sol.solution_grid, sol);
       setUnitNotes(card, sol.solution_grid);
       setSummary(card, sol.solution_grid);
       wireExploreButton(card, idx);
@@ -972,6 +1309,8 @@
     hideSolutionsArea();
     initModalBehavior();
     initMuntinToggle();
+    initDoorBoreToggle();
+    initHardwareColorSelector();
 
     hideFormBlocker();
 
