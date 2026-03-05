@@ -89,7 +89,7 @@
  *      - meta (object; optional)
  *      - opening_width, opening_height, jamb_depth (optional; per-solution override of root values)
  *      - unit_width, unit_height (optional; decimal inches; used for SVG dimension annotations)
- *      - door_bore ("left" | "right" | null; which stile gets the bore hole; defaults to "right" for single doors)
+ *      - door_bore ("left" | "right" | null; which stile gets the bore hole; defaults per assembly template's door_bore value)
  *  - Required external function (called on Explore click):
  *    - window.build_assembly_svg(index) must exist for rendering; if missing, current behavior logs a warning and continues.
  *
@@ -905,11 +905,21 @@
     return false;
   }
 
-  /** Default door_bore to "right" for solutions with a single door. */
+  /** Default door_bore for solutions with a single door, using the assembly template's door_bore value. */
   function ensureDoorBoreDefault(solution) {
     if (!solution) return;
     if (!solution.door_bore && solutionHasSingleDoor(solution)) {
-      solution.door_bore = "right";
+      var defaultSide = "right";
+      var tplName = solution.assembly_template;
+      if (tplName && window.ASSEMBLY_TEMPLATES) {
+        for (var i = 0; i < window.ASSEMBLY_TEMPLATES.length; i++) {
+          if (window.ASSEMBLY_TEMPLATES[i].template === tplName) {
+            defaultSide = window.ASSEMBLY_TEMPLATES[i].door_bore || "right";
+            break;
+          }
+        }
+      }
+      solution.door_bore = defaultSide;
     }
   }
 
