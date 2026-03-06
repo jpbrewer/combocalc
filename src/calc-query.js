@@ -46,6 +46,9 @@
  *    - gap_wrapper_div (parent of specify checkboxes + measurement inputs)
  *    - side_gap_msmt_wrapper, top_gap_msmt_wrapper
  *
+ *  Door width selects (SELECT ids inside door_width_msmt_wrapper):
+ *    - door_width_inch, door_width_frac
+ *
  * Outputs:
  *  - DOM changes:
  *    - Toggles blockers: blocker_b / blocker_c display (block/unblock sections B and C).
@@ -93,8 +96,12 @@
  *      OUT=DOOR -> show door detail (if advanced checked); hide CO detail.
  *      Switching OUT from CO -> DOOR -> performs a FULL Section C reset.
  *  - Door width logic:
- *      dwho_system_decides -> hide door width scope + msmt; clear dws radios.
+ *      dwho_system_decides -> hide door width scope + msmt; clear dws radios; reset door width selects.
  *      dwho_user_decides -> show scope; reveal msmt only if dws_* chosen.
+ *      dws_slab_dim -> filter door_width_inch to standard slab widths (24,28,30,32,36,48,56,60,64,72);
+ *                      set door_width_frac to 0 and hide it.
+ *      dws_unit_dim -> restore all original door_width_inch options; show door_width_frac.
+ *      Any higher-tier reset (Section C reset, CO mode, system-decides) restores clean initial state.
  *  - Advanced:
  *      advanced_check_box gates visibility of door_detail_wrapper, co_detail_wrapper,
  *      and gap_wrapper_div (which contains the specify-gaps checkboxes and measurement inputs).
@@ -156,6 +163,10 @@
     divGapWrapper: "gap_wrapper_div",
     divSideGapMsmt: "side_gap_msmt_wrapper",
     divTopGapMsmt: "top_gap_msmt_wrapper",
+
+    // Door width selects (SELECT ids inside door_width_msmt_wrapper)
+    doorWidthInch: "door_width_inch",
+    doorWidthFrac: "door_width_frac",
   };
 
   // ---- Required IDs at boot (contract) ----
@@ -329,11 +340,15 @@
   let lastDwhoMode = null; // "system" | "user" | null
   let lastOutMode = null; // "door" | "co" | null
   let lastAdvancedState = false; // tracks advanced checkbox for transition detection
+  let doorWidthInchOriginalOptions = null; // snapshot of original <option> elements, set at boot
 
   // ---------------------------
   // RESET SECTION C
   // ---------------------------
   const resetSectionC = () => {
+    // Clear door who decides before re-defaulting (hardCheck does not auto-uncheck sibling radios)
+    hardUncheckMany([IDS.dwhoSystemDecides, IDS.dwhoUserDecides]);
+
     // Defaults: OUT=door, standard door height, door who decides=system
     hardCheckMany([IDS.outDoor, IDS.dhtStandard, IDS.dwhoSystemDecides]);
 
@@ -359,6 +374,9 @@
       IDS.divTopGapMsmt,
     ].forEach(hideDiv);
 
+    // Restore door width selects to clean initial state
+    resetDoorWidthSelects();
+
     lastDwhoMode = null;
     lastOutMode = null;
     lastAdvancedState = false;
@@ -379,6 +397,45 @@
     return null;
   };
 
+  // ---------------------------
+  // DOOR WIDTH SELECT HELPERS
+  // ---------------------------
+  const SLAB_WIDTHS = new Set(["24","28","30","32","36","48","56","60","64","72"]);
+
+  /** Restore door width selects to their clean initial state. */
+  const resetDoorWidthSelects = () => {
+    const inchSel = byId(IDS.doorWidthInch);
+    const fracSel = byId(IDS.doorWidthFrac);
+
+    if (inchSel && doorWidthInchOriginalOptions) {
+      inchSel.innerHTML = "";
+      doorWidthInchOriginalOptions.forEach(o => inchSel.appendChild(o.cloneNode(true)));
+    }
+
+    if (fracSel) {
+      fracSel.value = "0";
+      fracSel.style.display = "";
+    }
+  };
+
+  /** Filter door_width_inch to slab-only values and hide frac. */
+  const applySlabWidthFilter = () => {
+    const inchSel = byId(IDS.doorWidthInch);
+    const fracSel = byId(IDS.doorWidthFrac);
+
+    if (inchSel && doorWidthInchOriginalOptions) {
+      inchSel.innerHTML = "";
+      doorWidthInchOriginalOptions
+        .filter(o => SLAB_WIDTHS.has(o.value))
+        .forEach(o => inchSel.appendChild(o.cloneNode(true)));
+    }
+
+    if (fracSel) {
+      fracSel.value = "0";
+      fracSel.style.display = "none";
+    }
+  };
+
   const applyDoorRules = () => {
     if (!isChecked(IDS.outDoor)) return;
 
@@ -388,6 +445,7 @@
       hideDiv(IDS.divDoorWidthScope);
       hideDiv(IDS.divDoorWidthMsmt);
       hardUncheckMany([IDS.dwsUnitDim, IDS.dwsSlabDim]);
+      resetDoorWidthSelects();
       lastDwhoMode = mode;
       return;
     }
@@ -404,6 +462,14 @@
       // Reveal msmt if a scope choice is selected
       if (isChecked(IDS.dwsUnitDim) || isChecked(IDS.dwsSlabDim)) {
         showDiv(IDS.divDoorWidthMsmt, "");
+
+        // Slab dim: filter to standard slab widths, hide frac
+        // Unit dim: restore all options, show frac
+        if (isChecked(IDS.dwsSlabDim)) {
+          applySlabWidthFilter();
+        } else {
+          resetDoorWidthSelects();
+        }
       }
 
       lastDwhoMode = mode;
@@ -434,6 +500,7 @@
     hideDiv(IDS.divDoorDetail);
     hideDiv(IDS.divDoorWidthScope);
     hideDiv(IDS.divDoorWidthMsmt);
+    resetDoorWidthSelects();
 
     if (isChecked(IDS.advanced)) showDiv(IDS.divCoDetail, "");
     else hideDiv(IDS.divCoDetail);
@@ -622,6 +689,12 @@
   // ---------------------------
   const boot = () => {
     if (!validateRequiredIdsOrDisable()) return;
+
+    // Snapshot original door_width_inch options before any filtering
+    const inchSelect = byId(IDS.doorWidthInch);
+    if (inchSelect) {
+      doorWidthInchOriginalOptions = Array.from(inchSelect.options).map(o => o.cloneNode(true));
+    }
 
     // Defaults on load: B and C blocked; C master reset
     setBlocker(IDS.blockerB, true);

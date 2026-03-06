@@ -223,12 +223,19 @@ Removing fixed height from `#explore` will break layout scaling.
 |-----------------------------------|--------------------------------|--------------------------------------------------------------|-----------------|-------------------------------------------|
 | `door_detail_wrapper`             | `div`                          | Contains all door-specific Section C controls                | `calc-query.js` | Script disables itself on boot (required) |
 | `door_width_scope_wrapper`        | `div`                          | Contains door width scope radio group (unit vs slab)         | `calc-query.js` | Script disables itself on boot (required) |
-| `door_width_msmt_wrapper`         | `div`                          | Contains door width measurement input field                  | `calc-query.js` | Script disables itself on boot (required) |
+| `door_width_msmt_wrapper`         | `div`                          | Contains door width measurement selects (inch + frac)        | `calc-query.js` | Script disables itself on boot (required) |
 | `co_detail_wrapper`               | `div`                          | Contains all CO-specific Section C controls                  | `calc-query.js` | Script disables itself on boot (required) |
 | `co_width_msmt_wrapper`           | `div`                          | Contains CO width measurement input field                    | `calc-query.js` | Script disables itself on boot (required) |
 | `gap_wrapper_div`                 | `div`                          | Parent wrapper for all gap-related controls (specify checkboxes + measurements) | `calc-query.js` | Script disables itself on boot (required) |
 | `side_gap_msmt_wrapper`           | `div`                          | Contains side gap measurement input field                    | `calc-query.js` | Script disables itself on boot (required) |
 | `top_gap_msmt_wrapper`            | `div`                          | Contains top gap measurement input field                     | `calc-query.js` | Script disables itself on boot (required) |
+
+## Door width selects (inside `door_width_msmt_wrapper`)
+
+| ID                 | Element Type | Purpose                                                      | Controlled By   | Failure Behavior if Missing               |
+|--------------------|--------------|--------------------------------------------------------------|-----------------|-------------------------------------------|
+| `door_width_inch`  | `select`     | Door width whole-inch value (options: 24–76)                 | `calc-query.js` | Slab/unit filtering skipped (fail soft)   |
+| `door_width_frac`  | `select`     | Door width fractional-inch value; hidden when slab dim selected | `calc-query.js` | Frac hide/reset skipped (fail soft)       |
 
 ## Modal elements
 
@@ -369,10 +376,12 @@ After master reset:
 
 ## Section C — Door width rules
 
-| `dwho_*` state      | Result                                                               |
-|---------------------|----------------------------------------------------------------------|
-| `dwho_system_decides` | `door_width_scope_wrapper` hidden; `door_width_msmt_wrapper` hidden; `dws_*` cleared |
-| `dwho_user_decides`   | `door_width_scope_wrapper` shown; `door_width_msmt_wrapper` shown only if a `dws_*` is selected |
+| `dwho_*` / `dws_*` state | Result                                                               |
+|--------------------------|----------------------------------------------------------------------|
+| `dwho_system_decides`    | `door_width_scope_wrapper` hidden; `door_width_msmt_wrapper` hidden; `dws_*` cleared; door width selects reset to initial state |
+| `dwho_user_decides`      | `door_width_scope_wrapper` shown; `door_width_msmt_wrapper` shown only if a `dws_*` is selected |
+| `dws_unit_dim`           | `door_width_inch` shows all original options (24–76); `door_width_frac` visible and reset to 0 |
+| `dws_slab_dim`           | `door_width_inch` filtered to slab widths only (24, 28, 30, 32, 36, 48, 56, 60, 64, 72); `door_width_frac` hidden and set to 0 |
 
 ## Section C — CO width rules
 
