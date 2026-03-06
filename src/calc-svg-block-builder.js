@@ -125,6 +125,8 @@
  *    - door/sidelite/co/double_door are rotated -90° at the end (render_root transform + swapped viewBox dims).
  *    - co hides sash internals (rails/stiles/glass) and suppresses outside_boundary_sash stroke.
  *    - door-like modes hide `jamb_left`.
+ *    - head_detail bypasses the template renderer entirely; produces a simple white-filled
+ *      rectangle with 2px black border. No cols/rows/stiles/rails needed.
  *  - Single-door blocks include two bore circle groups (<g data-bore="left"> and <g data-bore="right">)
  *    in the sash group. Bore circles: 2.125" diameter, 36" from bottom, 2.375" from door edge (centerline),
  *    white fill with boundary stroke styling. Visibility is controlled post-mount by window.updateBoreVisibility().
@@ -993,6 +995,20 @@ window.build_block_svgs = function build_block_svgs(index, muntins) {
   for (const block of buildObjects) {
     if (!block || typeof block !== "object") continue;
     const pos = mustStr(block.block_pos, "build_objects[].block_pos");
+
+    // head_detail: simple white rectangle with black border (no template needed)
+    if (String(block.construction || "").trim() === "head_detail") {
+      var hdW = Number(block.width) * PX_PER_INCH;
+      var hdH = Number(block.height) * PX_PER_INCH;
+      var hdSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + hdW + ' ' + hdH + '"'
+        + ' width="' + (hdW * DISPLAY_SCALE) + '" height="' + (hdH * DISPLAY_SCALE) + '">'
+        + '<rect x="0" y="0" width="' + hdW + '" height="' + hdH + '"'
+        + ' fill="white" stroke="black" stroke-width="2"/>'
+        + '</svg>';
+      solution[cacheKey][pos] = hdSvg;
+      continue;
+    }
+
     var renderBlock = block;
     if (!useMuntins) {
       renderBlock = Object.assign({}, block, { rows: 1, cols: 1 });

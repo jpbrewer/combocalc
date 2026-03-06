@@ -73,6 +73,9 @@
  *   - comboSolutions[index].unit_height (number|null): unit height in decimal inches.
  *     When present, dimension annotation lines and fractional-inch labels are
  *     rendered above (width) and to the left (height) of the assembled drawing.
+ *     Height arrow span is computed from placement heights: pos2.h + pos5.h
+ *     (when pos5 exists and its construction is not "head_detail"). This ensures
+ *     the arrow aligns with the actual unit blocks regardless of template letter.
  *     When both are null/falsy, no annotations are drawn and viewBox is unchanged.
  *
  * - Block SVG contract:
@@ -490,9 +493,26 @@ function build_assembly_svg(index, muntins) {
       root.appendChild(g);
     }
 
-    // 8a) Append dimension annotations (width above, height to left)
+    // 8a) Compute arrow height from pos2 (+ pos5 if it's not a head_detail)
+    var arrowHeight = 0;
+    if (placements["pos2"]) arrowHeight = placements["pos2"].h;
+    if (placements["pos5"]) {
+      var pos5IsHD = false;
+      if (Array.isArray(solution.build_objects)) {
+        for (var bi = 0; bi < solution.build_objects.length; bi++) {
+          var bo = solution.build_objects[bi];
+          if (bo && bo.block_pos === "pos5" && String(bo.construction || "").trim() === "head_detail") {
+            pos5IsHD = true;
+            break;
+          }
+        }
+      }
+      if (!pos5IsHD) arrowHeight += placements["pos5"].h;
+    }
+
+    // 8b) Append dimension annotations (width above, height to left)
     var dimMargins = appendDimensionAnnotations(
-      root, bounds, solution.unit_width, solution.unit_height
+      root, bounds, solution.unit_width, solution.unit_height, arrowHeight
     );
 
     // 8b) Set viewBox expanded by dimension margins
@@ -679,7 +699,7 @@ function dimLine(parent, x1, y1, x2, y2, sw, color) {
   line.setAttribute("y2", y2);
   line.setAttribute("stroke", color);
   line.setAttribute("stroke-width", sw);
-  line.setAttribute("stroke-linecap", "round");
+  line.setAttribute("stroke-linecap", "butt");
   parent.appendChild(line);
 }
 
@@ -714,13 +734,14 @@ function dimTextRotated(parent, x, y, str, size, color) {
  * Appends width/height dimension annotation lines and labels to the
  * assembled SVG. Returns margin amounts needed to expand the viewBox.
  *
- * @param {SVGElement} root       - The assembled <svg> element
- * @param {Object}     bounds     - { minX, minY, w, h } of the drawing
- * @param {number|null} widthIn   - Unit width in decimal inches
- * @param {number|null} heightIn  - Unit height in decimal inches
+ * @param {SVGElement}  root        - The assembled <svg> element
+ * @param {Object}      bounds      - { minX, minY, w, h } of the full drawing
+ * @param {number|null} widthIn     - Unit width in decimal inches
+ * @param {number|null} heightIn    - Unit height in decimal inches
+ * @param {number}      arrowHeight - Height arrow span in SVG units (pos2.h + pos5.h if not head_detail)
  * @returns {{ topMargin: number, leftMargin: number }}
  */
-function appendDimensionAnnotations(root, bounds, widthIn, heightIn) {
+function appendDimensionAnnotations(root, bounds, widthIn, heightIn, arrowHeight) {
   if (!widthIn && !heightIn) return { topMargin: 0, leftMargin: 0 };
 
   var maxDim   = Math.max(bounds.w, bounds.h);
@@ -762,10 +783,13 @@ function appendDimensionAnnotations(root, bounds, widthIn, heightIn) {
   }
 
   // --- Height dimension (vertical line left of drawing) ---
+  // Anchored at the bottom of the drawing; extends upward by arrowHeight
+  // (pos2.h + pos5.h when pos5 is not head_detail). This aligns the arrow
+  // with the actual unit, excluding any head_detail block above.
   if (heightIn) {
     var lineX = bounds.minX - gap;
-    var y1 = bounds.minY;
     var y2 = bounds.minY + bounds.h;
+    var y1 = y2 - arrowHeight;
 
     // Main vertical line
     dimLine(g, lineX, y1, lineX, y2, strokeW, color);
@@ -778,9 +802,9 @@ function appendDimensionAnnotations(root, bounds, widthIn, heightIn) {
     dimLine(g, lineX, y2, lineX - arrowLen, y2 - arrowLen, strokeW, color);
     dimLine(g, lineX, y2, lineX + arrowLen, y2 - arrowLen, strokeW, color);
 
-    // Label centered, rotated -90deg
+    // Label centered between arrow endpoints, rotated -90deg
     var textCX = lineX - hTextPad;
-    var textCY = bounds.minY + bounds.h / 2;
+    var textCY = (y1 + y2) / 2;
     dimTextRotated(g, textCX, textCY, dimToFraction(heightIn), fontSize, color);
   }
 

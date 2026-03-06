@@ -456,10 +456,12 @@ Full contract documentation in webflow-contract.md
   - Rendering is driven only by `comboSolutions[index].build_objects`.
   - Template SVG IDs in `window.WINDOW_TYPE_A_SVG_TEXT` are treated as a stable API.
   - Pattern images are referenced via resolved URLs from DOM `<img>` elements.
+  - `head_detail` construction bypasses the template renderer; produces a white-filled rectangle with 2px black border (no cols/rows/stiles/rails).
 - `calc-svg-block-assembler.js`:
   - Template selection uses only `solution.assembly_template`.
   - Layout uses only template op sequence + block viewBox dimensions.
   - Output mounts translated `<g data-pos="...">` groups (no nested `<svg>` tags).
+  - Height dimension arrow is anchored at the bottom of the drawing and extends upward by `placements["pos2"].h + placements["pos5"].h` (pos5 included only when it exists and its construction is not `"head_detail"`). This position-based rule aligns the arrow with the actual unit blocks regardless of template letter.
 
 ---
 
