@@ -155,7 +155,7 @@ window.HARDWARE_COLORS = [
     "color": "#C9A227"
   },
   {
-    "name": "Oil-Rubbed Branze",
+    "name": "Oil-Rubbed Bronze",
     "color": "#4A3B2A"
   },
 ];
