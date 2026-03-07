@@ -76,6 +76,8 @@
  *     Height arrow span is computed from placement heights: pos2.h + pos5.h
  *     (when pos5 exists and its construction is not "head_detail"). This ensures
  *     the arrow aligns with the actual unit blocks regardless of template letter.
+ *     When a head_detail placement exists (pos5 or pos7), a "Head Detail" label
+ *     with a short horizontal arrow is drawn to the right of the drawing.
  *     When both are null/falsy, no annotations are drawn and viewBox is unchanged.
  *
  * - Block SVG contract:
@@ -495,9 +497,9 @@ function build_assembly_svg(index, muntins) {
 
     // 8a) Compute arrow height from pos2 (+ pos5 if it's not a head_detail)
     var arrowHeight = 0;
+    var pos5IsHD = false;
     if (placements["pos2"]) arrowHeight = placements["pos2"].h;
     if (placements["pos5"]) {
-      var pos5IsHD = false;
       if (Array.isArray(solution.build_objects)) {
         for (var bi = 0; bi < solution.build_objects.length; bi++) {
           var bo = solution.build_objects[bi];
@@ -510,15 +512,32 @@ function build_assembly_svg(index, muntins) {
       if (!pos5IsHD) arrowHeight += placements["pos5"].h;
     }
 
-    // 8b) Append dimension annotations (width above, height to left)
+    // 8b) Find head_detail placement (if any) for label annotation
+    var hdPlacement = null;
+    if (pos5IsHD && placements["pos5"]) {
+      hdPlacement = placements["pos5"];
+    } else if (placements["pos7"]) {
+      // Check if pos7 is head_detail (some templates may use pos7)
+      if (Array.isArray(solution.build_objects)) {
+        for (var hbi = 0; hbi < solution.build_objects.length; hbi++) {
+          var hbo = solution.build_objects[hbi];
+          if (hbo && hbo.block_pos === "pos7" && String(hbo.construction || "").trim() === "head_detail") {
+            hdPlacement = placements["pos7"];
+            break;
+          }
+        }
+      }
+    }
+
+    // 8c) Append dimension annotations (width above, height to left, HD label to right)
     var dimMargins = appendDimensionAnnotations(
-      root, bounds, solution.unit_width, solution.unit_height, arrowHeight
+      root, bounds, solution.unit_width, solution.unit_height, arrowHeight, hdPlacement
     );
 
-    // 8b) Set viewBox expanded by dimension margins
+    // 8d) Set viewBox expanded by dimension margins
     var vbX = bounds.minX - dimMargins.leftMargin;
     var vbY = bounds.minY - dimMargins.topMargin;
-    var vbW = bounds.w + dimMargins.leftMargin;
+    var vbW = bounds.w + dimMargins.leftMargin + dimMargins.rightMargin;
     var vbH = bounds.h + dimMargins.topMargin;
     root.setAttribute("viewBox", vbX + " " + vbY + " " + vbW + " " + vbH);
 
@@ -738,10 +757,11 @@ function dimTextRotated(parent, x, y, str, size, color) {
  * @param {Object}      bounds      - { minX, minY, w, h } of the full drawing
  * @param {number|null} widthIn     - Unit width in decimal inches
  * @param {number|null} heightIn    - Unit height in decimal inches
- * @param {number}      arrowHeight - Height arrow span in SVG units (pos2.h + pos5.h if not head_detail)
- * @returns {{ topMargin: number, leftMargin: number }}
+ * @param {number}      arrowHeight   - Height arrow span in SVG units (pos2.h + pos5.h if not head_detail)
+ * @param {Object|null} hdPlacement   - Placement {x,y,w,h} of head_detail block (null if none)
+ * @returns {{ topMargin: number, leftMargin: number, rightMargin: number }}
  */
-function appendDimensionAnnotations(root, bounds, widthIn, heightIn, arrowHeight) {
+function appendDimensionAnnotations(root, bounds, widthIn, heightIn, arrowHeight, hdPlacement) {
   if (!widthIn && !heightIn) return { topMargin: 0, leftMargin: 0 };
 
   var maxDim   = Math.max(bounds.w, bounds.h);
@@ -808,10 +828,43 @@ function appendDimensionAnnotations(root, bounds, widthIn, heightIn, arrowHeight
     dimTextRotated(g, textCX, textCY, dimToFraction(heightIn), fontSize, color);
   }
 
+  // --- Head detail label (horizontal arrow + text to the right of drawing) ---
+  var rightMargin = 0;
+  if (hdPlacement) {
+    var hdCenterY = hdPlacement.y + hdPlacement.h / 2;
+    var hdRightX  = bounds.minX + bounds.w;
+    var arrowStartX = hdRightX + gap;
+    var hdArrowLen  = maxDim * 0.04;
+    var arrowEndX   = arrowStartX + hdArrowLen;
+
+    // Horizontal arrow line
+    dimLine(g, arrowStartX, hdCenterY, arrowEndX, hdCenterY, strokeW, color);
+
+    // Left arrowhead (tip at left, arms go right)
+    dimLine(g, arrowStartX, hdCenterY, arrowStartX + arrowLen, hdCenterY - arrowLen, strokeW, color);
+    dimLine(g, arrowStartX, hdCenterY, arrowStartX + arrowLen, hdCenterY + arrowLen, strokeW, color);
+
+    // "Head Detail" label to the right of the arrow
+    var hdLabelX = arrowEndX + textPad;
+    var hdLabel = document.createElementNS(SVG_NS, "text");
+    hdLabel.setAttribute("x", hdLabelX);
+    hdLabel.setAttribute("y", hdCenterY);
+    hdLabel.setAttribute("text-anchor", "start");
+    hdLabel.setAttribute("dominant-baseline", "central");
+    hdLabel.setAttribute("font-family", "system-ui, -apple-system, sans-serif");
+    hdLabel.setAttribute("font-size", fontSize);
+    hdLabel.setAttribute("fill", color);
+    hdLabel.textContent = "Head Detail";
+    g.appendChild(hdLabel);
+
+    rightMargin = gap + hdArrowLen + textPad + fontSize * 7;
+  }
+
   root.appendChild(g);
 
   return {
     topMargin:  widthIn  ? topMargin  : 0,
-    leftMargin: heightIn ? leftMargin : 0
+    leftMargin: heightIn ? leftMargin : 0,
+    rightMargin: rightMargin
   };
 }
