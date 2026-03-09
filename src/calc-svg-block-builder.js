@@ -165,12 +165,12 @@ const MEETING_GAP = 2;
 
 // Tile sizes in SVG user units
 const PATTERN_TILE = {
-  rail: { w: 13824, h: 2304 },
-  stile: { w: 13824, h: 2304 },
-  bevelTop: { w: 13824, h: 2304 },
-  bevelBottom: { w: 13824, h: 2304 },
-  bevelSide: { w: 13824, h: 2304 },
-  glass: { w: 13824, h: 2304 },
+  rail: { w: 1024, h: 1024 },
+  stile: { w: 1024, h: 1024 },
+  bevelTop: { w: 1024, h: 1024 },
+  bevelBottom: { w: 1024, h: 1024 },
+  bevelSide: { w: 1024, h: 1024 },
+  glass: { w: 1024, h: 1024 },
 };
 
 // Boundary styling
