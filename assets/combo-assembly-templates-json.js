@@ -137,6 +137,51 @@
  *     - Tolerance increased to 2.00 (from earlier 0.01 in development phase).
  *     - Delivered via CDN bootstrap loader.
  */
+
+window.WAIT_MESSAGES = [
+  "Evaluating more than 184,000 possibilities.",
+  "Giving you only the best solutions we can find.",
+  "Each solution is individually scored.",
+  "Exploring all the ways this could actually work.",
+  "Testing combinations so you don’t have to.",
+  "Sorting through a mountain of possibilities.",
+  "Running advanced door-window-opening compatibility science.",
+  "Trying every arrangement except the impossible ones.",
+  "Making sure your opening gets a smart solution.",
+  "Solving geometry puzzles behind the scenes.",
+  "Running a small mountain of calculations.",
+  "Turning your opening into a geometry problem.",
+  "Sorting the clever ideas from the bad ones.",
+  "Looking for layouts that fit perfectly.",
+  "Testing layouts until one finally behaves.",
+  "Exploring combinations behind the digital curtain.",
+  "Sorting through options like a picky contractor.",
+];
+
+window.LONG_WAIT_MESSAGES = [
+  "Boy, there must be a lot of possibilities for this one.",
+  "Running the numbers… and then rerunning them.",
+  "Trying every sensible arrangement we can imagine.",
+  "Measuring twice. Calculating about twelve thousand times.",
+  "Searching for the least ridiculous solution.",
+  "Convincing the math that this opening makes sense.",
+  "Letting the algorithm stretch its legs.",
+  "Brute-forcing elegance, one layout at a time.",
+  "Exploring options you probably didn’t want anyway.",
+  "Narrowing down thousands of “maybe” answers.",
+  "Looking for the arrangement carpenters won’t laugh at.",
+  "Running through possibilities faster than you could.",
+  "Running the numbers like a geometry marathon.",
+  "We know waiting is hard. Thanks for hanging in.",
+  "Thanks for your patience while we run the numbers.",
+  "We appreciate your patience while we explore options.",
+  "Hang tight—we’re working hard on your solution.",
+  "Thanks for waiting while we search for the best fit.",
+  "We know this takes a moment. Thanks for sticking around.",
+  "Good solutions take a little time. Thanks for waiting.",
+  "Thanks for giving us a moment to do this right."
+];
+
 window.HARDWARE_COLORS = [
   {
     "name": "Chrome",

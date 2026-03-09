@@ -304,11 +304,14 @@ When `solution.location === "exterior"`, the ext_ wood tile URLs replace their i
    - `calc-combo-results.js` attaches a `submit` listener on the form (capture), prevents default submission and runs:
      - POST request to request endpoint → parse job id → set `window.job_id`
      - Poll retrieval endpoint up to `MAX_POLLS` with `sleep(POLL_INTERVAL_MS)` between attempts
+     - During polling: submit button shows "Calculating... N" (seconds counter); `#wait_message` div shown (display:flex) with rotating messages drawn from `window.WAIT_MESSAGES` (cycles 1–15) then `window.LONG_WAIT_MESSAGES` (cycles 16+), updated every other poll cycle
    - On success:
+     - Stop seconds counter, hide `#wait_message`
      - Normalize response → write `window.comboSolutions`
      - Render solution cards by cloning template card + rows
      - Show solutions area, show Webflow success panel, disable/grey submit, show form blocker
    - On failure:
+     - Stop seconds counter, hide `#wait_message`
      - Show Webflow fail panel (if present), restore submit, hide results + blocker
 
 4. **Explore flow**

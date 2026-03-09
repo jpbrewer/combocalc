@@ -44,7 +44,9 @@
  *    - #choose-door-bore       (div; door bore chooser wrapper — hidden by default; shown when solution has single door)
  *    - #door-bore-left         (clickable element; selects left-side bore)
  *    - #door-bore-right        (clickable element; selects right-side bore — default active)
+ *    - #wait_message           (div; polling wait-message container — hidden by default; shown (display:flex) during polling, hidden on success/failure)
  *  - Selectors / structural assumptions (inferred from code):
+ *    - [data-field="wait_text"]         (text element inside #wait_message; receives rotating wait messages during polling)
  *    - .solutions-list                  (container list where solution cards are appended)
  *    - [data-solution-card=”template”]  (template “solution card” to clone per solution)
  *    - Within each cloned card:
@@ -979,7 +981,7 @@
     return data;
   }
 
-  async function pollForSolutions(jobId, onFirstNotReady) {
+  async function pollForSolutions(jobId, onFirstNotReady, onEachNotReady) {
     await sleep(POLL_INTERVAL_MS);
 
     for (let attempt = 1; attempt <= MAX_POLLS; attempt++) {
@@ -992,6 +994,7 @@
       if (!isNotReady) return resp;
 
       if (attempt === 1 && typeof onFirstNotReady === "function") onFirstNotReady(resp);
+      if (typeof onEachNotReady === "function") onEachNotReady(attempt);
       if (attempt < MAX_POLLS) await sleep(POLL_INTERVAL_MS);
     }
 
@@ -1364,12 +1367,70 @@
       hideSolutionsArea();
       clearNonTemplateCards();
 
+      /* ── polling-feedback state ── */
+      var calcSeconds = 0;
+      var calcTimer = null;
+      var usedMessages = new Set();
+      var waitMsgEl = document.getElementById("wait_message");
+      var waitTextEl = waitMsgEl
+        ? waitMsgEl.querySelector('[data-field="wait_text"]')
+        : null;
+
+      function startCalcCounter() {
+        calcSeconds = 0;
+        calcTimer = setInterval(function () {
+          calcSeconds++;
+          setButtonText(btn, "Calculating... " + calcSeconds);
+        }, 1000);
+      }
+
+      function stopCalcCounter() {
+        if (calcTimer) { clearInterval(calcTimer); calcTimer = null; }
+      }
+
+      function showWaitMessage() {
+        if (waitMsgEl) waitMsgEl.style.display = "flex";
+      }
+
+      function hideWaitMessage() {
+        if (waitMsgEl) waitMsgEl.style.display = "none";
+      }
+
+      function pickRandomMessage(pool) {
+        var available = pool.filter(function (m) { return !usedMessages.has(m); });
+        if (available.length === 0) return null;
+        var msg = available[Math.floor(Math.random() * available.length)];
+        usedMessages.add(msg);
+        return msg;
+      }
+
+      function rotateWaitText(attempt) {
+        if (!waitTextEl) return;
+        var pool = attempt <= 15
+          ? (window.WAIT_MESSAGES || [])
+          : (window.LONG_WAIT_MESSAGES || []);
+        var msg = pickRandomMessage(pool);
+        if (msg) waitTextEl.textContent = msg;
+      }
+      /* ── end polling-feedback state ── */
+
       try {
         const jobId = await submitInitialRequest(form);
 
-        const resp = await pollForSolutions(jobId, () => {
-          setButtonText(btn, "Solutions Calculating...");
-        });
+        const resp = await pollForSolutions(
+          jobId,
+          function onFirstNotReady() {
+            startCalcCounter();
+            showWaitMessage();
+            rotateWaitText(1);
+          },
+          function onEachNotReady(attempt) {
+            if (attempt > 1 && attempt % 2 === 0) rotateWaitText(attempt);
+          }
+        );
+
+        stopCalcCounter();
+        hideWaitMessage();
 
         window.comboSolutions = normalizeSolutions(resp);
 
@@ -1384,6 +1445,9 @@
         showFormBlocker();
 
       } catch (err) {
+        stopCalcCounter();
+        hideWaitMessage();
+
         console.error("Combo request/poll failed:", err);
 
         hideSolutionsArea();

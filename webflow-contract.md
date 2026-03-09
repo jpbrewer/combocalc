@@ -152,6 +152,7 @@ Removing fixed height from `#explore` will break layout scaling.
 |------------------|--------------|-----------------------------------------------------------|-------------------------|-----------------------------------|
 | `solutions_area` | `div`        | Wrapper around solutions UI; hidden until poll success    | `calc-combo-results.js` | Solutions silently not shown      |
 | `blocker_form`   | `div`        | Overlay covering the form after results arrive            | `calc-combo-results.js` | Overlay skipped; form stays interactive after results |
+| `wait_message`   | `div`        | Polling wait-message container; shown (display:flex) during polling, hidden on success/failure. Contains `[data-field="wait_text"]` for rotating messages. | `calc-combo-results.js` | Wait messages silently skipped |
 
 ## Section blockers
 
