@@ -35,6 +35,11 @@
  *    - #img_bevel_bottom_wood  (PNG for bevel bottom)
  *    - #img_bevel_side_wood    (PNG for bevel left/right)
  *    - #img_glass              (PNG for glass)
+ *    - #img_ext_rail_wood      (PNG for exterior rails)
+ *    - #img_ext_stile_wood     (PNG for exterior stiles)
+ *    - #img_ext_bevel_top_wood (PNG for exterior bevel top)
+ *    - #img_ext_bevel_bottom_wood (PNG for exterior bevel bottom)
+ *    - #img_ext_bevel_side_wood   (PNG for exterior bevel left/right)
  *  - Structural assumptions:
  *    - These <img> elements exist in the DOM when rendering runs, and have resolvable URLs (currentSrc/src).
  *
@@ -43,6 +48,8 @@
  *    - `window.WINDOW_TYPE_A_SVG_TEXT` (string): the full SVG template text.
  *    - `window.comboSolutions` (array): solutions array.
  *    - `window.comboSolutions[index].build_objects` (array): block request objects.
+ *    - `window.comboSolutions[index].location` (string, optional): "interior" or "exterior".
+ *      When "exterior", wood tile patterns are swapped to exterior variants; glass unchanged.
  *  - Required per-block fields inside each `build_objects[]` entry (as used by this file):
  *    - block_pos (string)                 -> becomes key in `building_block_svgs`
  *    - construction (string)              -> normalized; supports door-like + co + double_door
@@ -65,6 +72,9 @@
  *    - rect#muntin_vertical_proto, rect#muntin_horizontal_proto
  *    - path#bevel_top_proto (used to infer bevel thickness)
  *      (also expected / used / hidden if present): #bevel_bottom_proto, #bevel_left_proto, #bevel_right_proto, #bevel_lite_proto
+ *    - g#stop_prototypes (optional; used for window constructions only)
+ *    - path#stop_top_proto (used to infer stop thickness)
+ *      (also expected / used / hidden if present): #stop_bottom_proto, #stop_left_proto, #stop_right_proto
  *
  *  Runtime Assumptions:
  *  - Runs in a modern browser with:
@@ -136,10 +146,21 @@
  *    - Hinges straddle the door edge: inner edge on sash boundary, 0.5" protruding into jamb.
  *    - Fill color from solution.hardware_color (resolved via HARDWARE_COLORS); default Chrome (#D7D7D7).
  *    - Visibility controlled post-mount by window.updateHingeVisibility().
+ *  - Stop rendering (window constructions only: transom, flanker, sidelite):
+ *    - Stops are wood trim pieces bound to outside_boundary_sash (full sash edge), not individual lites.
+ *    - Stop thickness extracted from stop_top_proto path (independent of bevel thickness).
+ *    - Uses same pattern fills as bevels (pat_bevel_top, pat_bevel_bottom, pat_bevel_side).
+ *    - 45-degree mitered corners via buildBevelPathsForLite() with sash boundary rect.
+ *    - Appended to render_root as last child for highest Z-order (renders on top of sash).
+ *    - Not applied to door, double_door, or co constructions.
  *  - double_door behavior:
  *    - Upstream width is treated as TOTAL combined width; per-leaf input width is divided by 2.
  *    - Two leaves are stacked vertically in pre-rotation space with `MEETING_GAP` between them.
  *    - Leaf2 base geometry (rails/stiles/boundary + glass) is cloned and pattern-filled explicitly.
+ *  - Exterior location support:
+ *    - When solution.location === "exterior", all wood pattern URLs (rail, stile, bevel*) are swapped
+ *      to their ext_ counterparts before rendering. Glass pattern is unchanged.
+ *    - The renderer itself is unaware of location; the swap happens in build_block_svgs() before calling it.
  *  - Boundary strokes are non-scaling (`vector-effect: non-scaling-stroke`) and use BOUNDARY_STROKE_OPACITY (default 0.50).
  *
  * Version Notes:
@@ -219,6 +240,11 @@ const PATTERN_IMG_IDS = {
   bevelBottom: "img_bevel_bottom_wood",
   bevelSide: "img_bevel_side_wood",
   glass: "img_glass",
+  extRail: "img_ext_rail_wood",
+  extStile: "img_ext_stile_wood",
+  extBevelTop: "img_ext_bevel_top_wood",
+  extBevelBottom: "img_ext_bevel_bottom_wood",
+  extBevelSide: "img_ext_bevel_side_wood",
 };
 
 function getPatternUrlsFromDom() {
@@ -236,6 +262,11 @@ function getPatternUrlsFromDom() {
     bevelBottom: mustGet(PATTERN_IMG_IDS.bevelBottom),
     bevelSide: mustGet(PATTERN_IMG_IDS.bevelSide),
     glass: mustGet(PATTERN_IMG_IDS.glass),
+    extRail: mustGet(PATTERN_IMG_IDS.extRail),
+    extStile: mustGet(PATTERN_IMG_IDS.extStile),
+    extBevelTop: mustGet(PATTERN_IMG_IDS.extBevelTop),
+    extBevelBottom: mustGet(PATTERN_IMG_IDS.extBevelBottom),
+    extBevelSide: mustGet(PATTERN_IMG_IDS.extBevelSide),
   };
 }
 
@@ -531,6 +562,12 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
   const bevelRightProto = qsById(doc, "bevel_right_proto");
   const bevelLiteProto = qsById(doc, "bevel_lite_proto");
 
+  const stopProtosEl = qsById(doc, "stop_prototypes");
+  const stopTopProto = qsById(doc, "stop_top_proto");
+  const stopBottomProto = qsById(doc, "stop_bottom_proto");
+  const stopLeftProto = qsById(doc, "stop_left_proto");
+  const stopRightProto = qsById(doc, "stop_right_proto");
+
   if (!sashBoundary || !unitBoundary) throw new Error("Template missing outside boundaries");
   if (!railTop || !railBottom || !stileLeft || !stileRight) throw new Error("Template missing rails/stiles");
   if (!daylight) throw new Error("Template missing daylight_rect");
@@ -544,6 +581,7 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
   const IS_CO = CONSTRUCTION === "co";
   const IS_DOUBLE_DOOR = CONSTRUCTION === "double_door";
   const IS_DOORLIKE = CONSTRUCTION === "door" || IS_CO || IS_DOUBLE_DOOR;
+  const IS_WINDOW = (CONSTRUCTION === "transom" || CONSTRUCTION === "flanker" || CONSTRUCTION === "sidelite");
 
   const IS_ROTATED =
     (CONSTRUCTION === "door" || CONSTRUCTION === "sidelite" || CONSTRUCTION === "co" || CONSTRUCTION === "double_door");
@@ -807,6 +845,10 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
   if (bevelLeftProto) hideEl(bevelLeftProto);
   if (bevelRightProto) hideEl(bevelRightProto);
   if (bevelLiteProto) hideEl(bevelLiteProto);
+  if (stopTopProto) hideEl(stopTopProto);
+  if (stopBottomProto) hideEl(stopBottomProto);
+  if (stopLeftProto) hideEl(stopLeftProto);
+  if (stopRightProto) hideEl(stopRightProto);
 
   // CO hides everything inside sash bbox and skips muntins/bevels
   if (IS_CO) {
@@ -942,6 +984,52 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
 
     bevelProtosEl.appendChild(bevelsG);
     muntinProtosEl.appendChild(muntinsG);
+
+    // Generate stops for window constructions (bound to outside_boundary_sash)
+    if (IS_WINDOW && stopTopProto) {
+      const stopT = extractBevelThicknessFromPath(stopTopProto.getAttribute("d"));
+
+      const existingStops = renderRootEl.querySelector("#stops_generated");
+      if (existingStops) existingStops.remove();
+
+      const stopsG = doc.createElementNS(svgNS, "g");
+      stopsG.setAttribute("id", "stops_generated");
+
+      for (let leafIndex = 0; leafIndex < LEAF_COUNT; leafIndex++) {
+        const leafYOffset = LEAF_PITCH_Y * leafIndex;
+        const stopRect = { x: sx, y: sy + leafYOffset, w: LEAF_WIDTH, h: LEAF_HEIGHT };
+        const s = buildBevelPathsForLite(stopRect, stopT, STRICT_BEVEL_THICKNESS);
+        const id = `leaf${leafIndex + 1}`;
+
+        const sTop = doc.createElementNS(svgNS, "path");
+        sTop.setAttribute("id", `stop_top_${id}`);
+        sTop.setAttribute("d", s.top);
+        sTop.setAttribute("fill", "url(#pat_bevel_top)");
+
+        const sRight = doc.createElementNS(svgNS, "path");
+        sRight.setAttribute("id", `stop_right_${id}`);
+        sRight.setAttribute("d", s.right);
+        sRight.setAttribute("fill", "url(#pat_bevel_side)");
+
+        const sBottom = doc.createElementNS(svgNS, "path");
+        sBottom.setAttribute("id", `stop_bottom_${id}`);
+        sBottom.setAttribute("d", s.bottom);
+        sBottom.setAttribute("fill", "url(#pat_bevel_bottom)");
+
+        const sLeft = doc.createElementNS(svgNS, "path");
+        sLeft.setAttribute("id", `stop_left_${id}`);
+        sLeft.setAttribute("d", s.left);
+        sLeft.setAttribute("fill", "url(#pat_bevel_side)");
+
+        stopsG.appendChild(sTop);
+        stopsG.appendChild(sRight);
+        stopsG.appendChild(sBottom);
+        stopsG.appendChild(sLeft);
+      }
+
+      // Append to render_root last for highest Z-order (stops sit on top of sash)
+      renderRootEl.appendChild(stopsG);
+    }
   }
 
   const fit = INCLUDE_JAMB
@@ -980,6 +1068,15 @@ window.build_block_svgs = function build_block_svgs(index, muntins) {
   }
 
   const patternUrls = getPatternUrlsFromDom();
+
+  // Swap in exterior wood tiles when location is "exterior" (glass stays the same)
+  if (solution.location === "exterior") {
+    patternUrls.rail = patternUrls.extRail;
+    patternUrls.stile = patternUrls.extStile;
+    patternUrls.bevelTop = patternUrls.extBevelTop;
+    patternUrls.bevelBottom = patternUrls.extBevelBottom;
+    patternUrls.bevelSide = patternUrls.extBevelSide;
+  }
 
   // Resolve hardware color for hinge rendering
   var hwHex = "#D7D7D7"; // default Chrome

@@ -81,6 +81,11 @@
  *      - g#glass_area
  *      - g#bevel_prototypes
  *      - g#muntin_prototypes
+ *      - g#stop_prototypes
+ *      - path#stop_top_proto
+ *      - path#stop_bottom_proto
+ *      - path#stop_left_proto
+ *      - path#stop_right_proto
  *      - g#sash
  *      - g#unit
  *      - rect#outside_boundary_sash
@@ -134,7 +139,7 @@
     <g
        id="bevel_prototypes">
       <rect
-         style="display:inline;fill:#000000;fill-opacity:0.431122;stroke:none;stroke-width:0.2;stroke-dasharray:none;stroke-opacity:1"
+         style="display:inline;fill:#000000;fill-opacity:0.431122;stroke:none;stroke-width:0.2;stroke-dasharray:none;stroke-opacity:1;opacity:1"
          id="bevel_lite_proto"
          width="1440"
          height="384"
@@ -173,6 +178,26 @@
          height="816"
          x="1856.0525"
          y="416.25494" />
+    </g>
+    <g
+       id="stop_prototypes"
+       transform="translate(-2905.5131,-7.7149014)">
+      <path
+         id="stop_right_proto"
+         style="fill:#000000;fill-opacity:0.431122;stroke-width:0.755907"
+         d="M 6411.5653,255.96983 V 1407.9698 l -42,-42 V 297.96983 Z" />
+      <path
+         id="stop_left_proto"
+         style="fill:#000000;fill-opacity:0.431122;stroke-width:0.755907"
+         d="M 3531.5653,255.96983 V 1407.9698 l 42,-42 V 297.96983 Z" />
+      <path
+         id="stop_bottom_proto"
+         style="fill:#000000;fill-opacity:0.431122;stroke-width:0.755906"
+         d="m 3531.5653,1407.9698 42,-42 h 2796 l 42,42 z" />
+      <path
+         id="stop_top_proto"
+         style="fill:#000000;fill-opacity:0.431122;stroke-width:0.755906"
+         d="m 3531.5653,255.96983 42,42 h 2796 l 42,-42 z" />
     </g>
     <g
        id="sash">
@@ -251,8 +276,7 @@
          height="72" />
     </g>
   </g>
-</svg>
-`;
+</svg>`;
 
   // (optional quick sanity check)
   // console.log("WINDOW_TYPE_A_SVG_TEMPLATE length:", window.WINDOW_TYPE_A_SVG_TEMPLATE.length);

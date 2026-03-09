@@ -108,7 +108,7 @@ Assets / Data:
 | `calc-combo-results.js` | ORCHESTRATOR | On `DOMContentLoaded` | Globals: `window.job_id`, `window.comboSolutions` | DOM: form + solutions list templates + modal + icon registry; Data: endpoints; requires `window.build_assembly_svg` at Explore time | DOM: clones solution cards/rows; shows/hides areas, panels, modal; Data: fills `window.comboSolutions` | Uses network POST + polling; `build_assembly_svg` may load later but must exist before Explore action completes |
 | `combo-assembly-templates-json.js` | ASSET/DATA | On load | `window.ASSEMBLY_TEMPLATES` | None | Global data array | Must load before `calc-svg-block-assembler.js` and before any `build_assembly_svg` call |
 | `window-type-a-svg-raw.js` | ASSET/DATA | On load | `window.WINDOW_TYPE_A_SVG_TEXT` | None | Global string | Must load before `calc-svg-block-builder.js` (renderer) |
-| `calc-svg-block-builder.js` | RENDERER | On-demand (when called) | `window.build_block_svgs(index)` | DOM: pattern `<img>` IDs; Data: `window.WINDOW_TYPE_A_SVG_TEXT`, `window.comboSolutions[index].build_objects` | Data: creates `solution.building_block_svgs[pos] = svgString` | Requires template + comboSolutions + pattern images; fail-fast on missing prerequisites |
+| `calc-svg-block-builder.js` | RENDERER | On-demand (when called) | `window.build_block_svgs(index)` | DOM: pattern `<img>` IDs (interior + exterior); Data: `window.WINDOW_TYPE_A_SVG_TEXT`, `window.comboSolutions[index].build_objects`, `solution.location` | Data: creates `solution.building_block_svgs[pos] = svgString`; renders stops for window constructions; swaps to exterior wood tiles when location is "exterior" | Requires template + comboSolutions + pattern images; fail-fast on missing prerequisites |
 | `calc-svg-block-assembler.js` | ORCHESTRATOR | On-demand (when called) | `build_assembly_svg(index, muntins)` (**inferred** global function) | DOM: `div#explore`; Data: `window.ASSEMBLY_TEMPLATES`, `window.comboSolutions`, `window.build_block_svgs` | DOM: mounts inline `<svg>` into `#explore` (with optional dimension annotations when `unit_width`/`unit_height` present); Data: writes `solution.assembly_svg` + returns assembled artifact bundle | Requires templates + renderer + solution store; fail-fast (throws) on issues |
 
 ---
@@ -144,7 +144,7 @@ Assets / Data:
 - **Created by:** `calc-combo-results.js` after poll success.
 - **Consumed by:**
   - `calc-combo-results.js` for solutions list rendering and Explore button indexing.
-  - `calc-svg-block-builder.js` reads `comboSolutions[index].build_objects` and writes `comboSolutions[index].building_block_svgs`.
+  - `calc-svg-block-builder.js` reads `comboSolutions[index].build_objects` and `location`; writes `comboSolutions[index].building_block_svgs`.
   - `calc-svg-block-assembler.js` reads `comboSolutions[index].assembly_template`, `building_block_svgs`, `unit_width`, `unit_height`, `door_bore`, and `hardware_color`; writes `assembly_svg`. Exposes `window.updateBoreVisibility(side)`, `window.updateHingeVisibility(construction, boreSide)`, and `window.updateHingeColor(hexColor)` for post-mount hardware toggling.
 
 ### `window.job_id`
@@ -274,6 +274,13 @@ Full contract documentation in webflow-contract.md
 - `#img_bevel_bottom_wood`
 - `#img_bevel_side_wood`
 - `#img_glass`
+- `#img_ext_rail_wood`
+- `#img_ext_stile_wood`
+- `#img_ext_bevel_top_wood`
+- `#img_ext_bevel_bottom_wood`
+- `#img_ext_bevel_side_wood`
+
+When `solution.location === "exterior"`, the ext_ wood tile URLs replace their interior counterparts. Glass is unchanged.
 
 ---
 

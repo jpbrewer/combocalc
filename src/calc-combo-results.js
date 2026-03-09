@@ -76,6 +76,7 @@
  *    - Response root may contain:
  *      - opening_width (number), opening_height (number), jamb_depth (number)
  *      - unit_width (number), unit_height (number) — decimal inches for dimension annotations
+ *      - location (string): "interior" or "exterior" — determines wood tile set for SVG rendering
  *    - Each solution object may contain:
  *      - assembly_template (string)
  *      - assembly_no or arrangement_no (number/string)
@@ -90,6 +91,7 @@
  *      - meta (object; optional)
  *      - opening_width, opening_height, jamb_depth (optional; per-solution override of root values)
  *      - unit_width, unit_height (optional; decimal inches; used for SVG dimension annotations)
+ *      - location ("interior" | "exterior" | null; per-solution override of root; determines wood tile set)
  *      - door_bore ("left" | "right" | null; which stile gets the bore hole; defaults per assembly template's door_bore value)
  *      - hardware_color (string | null; hardware color name e.g. "Chrome"; defaults to "Chrome" for solutions with doors)
  *  - Required external function (called on Explore click):
@@ -145,7 +147,7 @@
  *
  *  Data Produced:
  *  - Normalized solution objects stored in window.comboSolutions:
- *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta, opening_width, opening_height, jamb_depth, door_bore }
+ *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta, opening_width, opening_height, jamb_depth, location, door_bore }
  *  - ICON_MAP (internal) created from #icon_registry: filename → Webflow asset URL.
  *
  * Load Order / Dependencies:
@@ -1018,9 +1020,10 @@
           jamb_depth:     resp.jamb_depth     ?? null,
           unit_width:     resp.unit_width     ?? null,
           unit_height:    resp.unit_height    ?? null,
+          location:       resp.location       ?? null,
         }
       : { opening_width: null, opening_height: null, jamb_depth: null,
-          unit_width: null, unit_height: null };
+          unit_width: null, unit_height: null, location: null };
 
     return arr.map((sol, idx) => ({
       index: idx,
@@ -1046,6 +1049,9 @@
       // Unit dimensions for SVG dimension annotations
       unit_width:     sol.unit_width     ?? rootOpening.unit_width,
       unit_height:    sol.unit_height    ?? rootOpening.unit_height,
+
+      // Location ("interior" | "exterior") — determines wood tile set
+      location:       sol.location       ?? rootOpening.location,
 
       // Door bore side ("left" | "right" | null)
       door_bore: sol.door_bore ?? null,
