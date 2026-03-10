@@ -81,8 +81,8 @@
 (function () {
 
   const BASE =
-  "https://localhost:3000/";  
-  //"https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@main/";
+  //"https://localhost:3000/";  
+  "https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@main/";
 
   /**
    * IMPORTANT:
@@ -92,6 +92,7 @@
   const FILE_ORDER = [
     "src/calc-query.js",
     "src/calc-combo-results.js",
+    "src/calc-modal.js",
     "assets/combo-assembly-templates-json.js",
     "assets/window-type-a-svg-raw.js",
     "src/calc-svg-block-builder.js",

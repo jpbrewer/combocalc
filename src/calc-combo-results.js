@@ -8,7 +8,7 @@
  * Purpose:
  *  - Intercepts a Webflow form submit, posts the form payload to a request API, then polls a retrieval API until results are ready or a timeout occurs.
  *  - Normalizes the returned solutions into a global store (window.comboSolutions) and renders a Webflow-built “solutions listing” UI from a template card.
- *  - Manages modal open/close behavior and wires each Explore button to open the modal and invoke build_assembly_svg(index).
+ *  - Exposes shared utilities via window._comboCalc for use by calc-modal.js and other modules.
  *
  * Context:
  *  - Runs in-browser as a single drop-in <script> embedded in Webflow (no bundler/modules).
@@ -35,16 +35,10 @@
  *    - #solutions_area          (wrapper around the solutions UI; hidden until poll success)
  *    - #blocker_form            (overlay “blocker” for the form; shown after poll success, hidden on reset)
  *    - #icon_registry           (hidden container; contains <img data-icon-name="..."> entries mapping filenames → asset URLs)
- *    - #modal-overlay           (modal overlay; display:flex to show; display:none to hide)
- *    - #modal-panel             (modal content panel; clicks inside should not close modal)
- *    - #modal-close             (close button; closes modal)
- *    - #no-muntin              (text block; muntin toggle "off" — default active on modal open)
- *    - #yes-muntin             (text block; muntin toggle "on" — shows actual rows/cols muntins)
- *    - #hardware_wrapper_div   (div; hardware controls wrapper — hidden by default; shown (display:flex) when solution has any door)
- *    - #choose-door-bore       (div; door bore chooser wrapper — hidden by default; shown when solution has single door)
- *    - #door-bore-left         (clickable element; selects left-side bore)
- *    - #door-bore-right        (clickable element; selects right-side bore — default active)
  *    - #wait_message           (div; polling wait-message container — hidden by default; shown (display:flex) during polling, hidden on success/failure)
+ *    NOTE: Modal DOM IDs (#modal-overlay, #modal-panel, #modal-close, #no-muntin, #yes-muntin,
+ *    #choose-door-bore, #door-bore-left, #door-bore-right, #hardware_wrapper_div, #hardware-color-wrapper,
+ *    #hardware-selector, #dbl-door-wrapper) are now managed by calc-modal.js.
  *  - Selectors / structural assumptions (inferred from code):
  *    - [data-field="wait_text"]         (text element inside #wait_message; receives rotating wait messages during polling)
  *    - .solutions-list                  (container list where solution cards are appended)
@@ -55,13 +49,8 @@
  *      - [data-solution-summary=”row”]  (summary row that contains [data-field=”summary”])
  *      - [data-solution-explore=”btn”]  (Explore button; dynamically wired and indexed)
  *      - [data-solution-icon=”img”]     (icon wrapper; must contain <img data-field=”icon”>)
- *    - Modal data grid (inside #modal-panel, after #explore):
- *      - [data-modal-summary=”section”] (opening summary block; contains data-field opening_width/opening_height/jamb_depth)
- *      - [data-modal-grid=”section”]    (solution grid container)
- *      - [data-modal-icon=”img”]        (icon wrapper; must contain <img data-field=”icon”>)
- *      - [data-modal-row=”template”]    (row template; cloned per position key)
- *      - [data-modal-notes=”row”]       (notes row; contains [data-field=”notes”])
- *      - [data-modal-configure=”btn”]   (“Configure and Buy” button; not wired by this file)
+ *    NOTE: Modal data grid selectors ([data-modal-summary], [data-modal-grid], [data-modal-icon],
+ *    [data-modal-row], [data-modal-notes]) are now managed by calc-modal.js.
  *  - ID semantics clarity:
  *    - All IDs referenced above are element IDs on the actual DOM nodes (not label wrappers for inputs).
  *    - This file does not read individual form input IDs; it relies on FormData(form) to collect values.
@@ -112,18 +101,13 @@
  *  Public API:
  *  - window.job_id              (Number; assigned after initial request)
  *  - window.comboSolutions      (Array<Solution>; assigned after successful retrieval)
- *  - No additional window.* functions are defined here.
- *  - Calls (requires) window.build_assembly_svg(index, muntins) on Explore click (muntins=false by default).
- *  - Muntin toggle: #no-muntin / #yes-muntin click handlers call build_assembly_svg with muntins false/true.
- *    CSS class "muntin-selection-active" is toggled on the active button.
- *  - Door bore toggle: #door-bore-left / #door-bore-right click handlers update solution.door_bore,
- *    invalidate assembly caches, and call window.updateBoreVisibility(side) + window.updateHingeVisibility()
- *    for instant DOM toggle. CSS class "door-selection-active" is toggled on the active button.
- *    #choose-door-bore is shown (display:flex) only when the solution has a single_door build_object.
- *    Also updates line_notes labels in the modal grid (Left-Hand ↔ Right-Hand).
- *  - Hardware color selector: a <select> populated from window.HARDWARE_COLORS is created inside
- *    #hardware-selector. On change, updates solution.hardware_color and calls window.updateHingeColor(hex).
- *    #hardware-color-wrapper is shown (display:flex) when solution has any door (single or double).
+ *  - window._comboCalc          (Object; shared utility namespace for calc-modal.js and other modules)
+ *    Contains: setField, stripWebflowInteractionIds, POS_ORDER, normalizeIconKey, ICON_MAP,
+ *    decimalToFraction, FRACTION_TABLE, resolveDoorTypeLabel, solutionHasSingleDoor,
+ *    solutionHasDoubleDoor, solutionHasAnyDoor, ensureDoorBoreDefault, resolveHardwareHex.
+ *    calc-modal.js also writes closeModal onto this namespace.
+ *  NOTE: Modal behavior (muntin toggle, door bore toggle, hardware color selector,
+ *  modal open/close, modal data grid) is now handled by calc-modal.js.
  *
  *  DOM Mutations:
  *  - Shows/hides:
@@ -138,15 +122,10 @@
  *      - cloning template card per solution
  *      - cloning row template per position key in POS_ORDER
  *      - populating [data-field="..."] nodes with solution_grid values
- *      - line_notes "XX" marker replaced: "Single-Hung"/"Double-Hung" in listing cards,
- *        "Left-Hand"/"Right-Hand" in modal (toggles with bore side)
+ *      - line_notes "XX" marker replaced with "Height" in listing cards
  *      - cloning summary row for unit_notes (above solution_notes) and solution_notes (below position rows)
  *      - setting icon <img data-field="icon"> src via ICON_MAP (or fallback resolution)
- *    - Modal overlay display toggled by openModal/closeModal.
- *    - Modal data grid:
- *      - populateModalGrid(idx) populates [data-modal-summary], sets icon via [data-modal-icon],
- *        clones [data-modal-notes] for unit_notes (above solution_notes) and solution_notes (bottom) in modal grid.
- *      - closeModal() clears cloned modal grid rows ([data-pos] and [data-unit-notes]) to prevent stale data.
+ *    NOTE: Modal overlay, modal data grid, and modal toggle behavior are now in calc-modal.js.
  *
  *  Data Produced:
  *  - Normalized solution objects stored in window.comboSolutions:
@@ -220,27 +199,6 @@
   const BLOCKER_FORM_ID = "blocker_form";
 
   const ICON_REGISTRY_ID = "icon_registry";
-
-  const MODAL_OVERLAY_ID = "modal-overlay";
-  const MODAL_PANEL_ID = "modal-panel";
-  const MODAL_CLOSE_ID = "modal-close";
-  const NO_MUNTIN_ID = "no-muntin";
-  const YES_MUNTIN_ID = "yes-muntin";
-  const MUNTIN_ACTIVE_CLASS = "muntin-selection-active";
-
-  const CHOOSE_DOOR_BORE_ID = "choose-door-bore";
-  const DOOR_BORE_LEFT_ID = "door-bore-left";
-  const DOOR_BORE_RIGHT_ID = "door-bore-right";
-  const DOOR_BORE_ACTIVE_CLASS = "door-selection-active";
-
-  const HARDWARE_WRAPPER_DIV_ID = "hardware_wrapper_div";
-  const HARDWARE_COLOR_WRAPPER_ID = "hardware-color-wrapper";
-  const HARDWARE_SELECTOR_ID = "hardware-selector";
-  const DBL_DOOR_WRAPPER_ID = "dbl-door-wrapper";
-
-  var currentModalIndex = null;
-  var currentMuntinState = false;
-  var currentDoorBore = "right";
 
   const REQUEST_ENDPOINT_URL =
     "https://api.transomsdirect.com/api:xyi0dc0X/bc_combo_solution_request";
@@ -406,370 +364,10 @@
   }
 
   // =========================================
-  // MODAL (behavior only)
-  // - Explore click opens modal first AND calls build_assembly_svg(index)
+  // MODAL
+  // Modal control logic extracted to calc-modal.js.
+  // closeModal() is accessible via window._comboCalc.closeModal.
   // =========================================
-  function openModal() {
-    const overlay = document.getElementById(MODAL_OVERLAY_ID);
-    if (overlay) overlay.style.display = "flex";
-    document.body.style.overflow = "hidden";
-  }
-  function resetHardwareColorToChrome() {
-    // Reset solution object if one is active
-    if (currentModalIndex !== null && window.comboSolutions) {
-      var solution = window.comboSolutions[currentModalIndex];
-      if (solution) {
-        solution.hardware_color = "Chrome";
-        solution.assembly_svg = null;
-        solution.assembly_svg_no_muntins = null;
-      }
-    }
-    // Reset the on-screen selector
-    var sel = document.getElementById("hardware-color-select");
-    if (sel) sel.value = "Chrome";
-  }
-
-  function closeModal() {
-    resetHardwareColorToChrome();
-    var dblWrapper = document.getElementById(DBL_DOOR_WRAPPER_ID);
-    if (dblWrapper) dblWrapper.style.display = "none";
-    const overlay = document.getElementById(MODAL_OVERLAY_ID);
-    if (overlay) overlay.style.display = "none";
-    document.body.style.overflow = "";
-    clearModalGridRows();
-    currentModalIndex = null;
-    currentMuntinState = false;
-  }
-
-  function initModalBehavior() {
-    const overlay = document.getElementById(MODAL_OVERLAY_ID);
-    const panel = document.getElementById(MODAL_PANEL_ID);
-    const closeBtn = document.getElementById(MODAL_CLOSE_ID);
-
-    // OPEN from Explore (capture phase, dynamic-safe)
-    document.addEventListener("click", (e) => {
-      const exploreBtn = e.target.closest('[data-solution-explore="btn"]');
-      if (!exploreBtn) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-
-      // 1) Open modal first
-      openModal();
-
-      // 2) Call renderer using stored index
-      const idx = Number(exploreBtn.dataset.solutionIndex);
-      if (!Number.isFinite(idx)) {
-        console.warn("Explore button missing/invalid data-solution-index.", exploreBtn);
-        return;
-      }
-
-      // Track which solution is in the modal and reset muntin toggle
-      currentModalIndex = idx;
-      setMuntinToggleState(false);
-
-      // Configure door bore chooser and hardware color selector
-      var solution = window.comboSolutions[idx];
-      configureDoorBoreForModal(solution);
-      configureHardwareWrapperForModal(solution);
-      configureHardwareColorForModal(solution);
-      configureDblDoorWrapperForModal(solution);
-
-      if (typeof window.build_assembly_svg !== "function") {
-        console.warn("build_assembly_svg(index) is not defined yet.");
-        return;
-      }
-      try {
-        window.build_assembly_svg(idx, false);
-      } catch (err) {
-        console.error("build_assembly_svg failed:", err);
-      }
-
-      // Set bore and hinge visibility on the mounted SVG
-      if (solution && typeof window.updateBoreVisibility === "function") {
-        window.updateBoreVisibility(solution.door_bore || "right");
-      }
-      if (solution && typeof window.updateHingeVisibility === "function") {
-        var doorType = solutionHasDoubleDoor(solution) ? "double_door"
-                     : solutionHasSingleDoor(solution) ? "single_door" : null;
-        if (doorType) {
-          window.updateHingeVisibility(doorType, solution.door_bore || "right");
-        }
-      }
-
-      // Populate modal data grid (fail-soft)
-      try {
-        populateModalGrid(idx);
-      } catch (err) {
-        console.warn("populateModalGrid failed:", err);
-      }
-    }, true);
-
-    // CLOSE: close button
-    if (closeBtn) {
-      closeBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        closeModal();
-      });
-    }
-
-    // CLOSE: click overlay background only
-    if (overlay) {
-      overlay.addEventListener("click", (e) => {
-        if (e.target === overlay) closeModal();
-      });
-    }
-
-    // DO NOT CLOSE: clicks inside panel
-    if (panel) panel.addEventListener("click", (e) => e.stopPropagation());
-
-    // ESC closes
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeModal();
-    });
-  }
-
-  // =========================================
-  // MUNTIN TOGGLE
-  // =========================================
-  function setMuntinToggleState(showMuntins) {
-    currentMuntinState = showMuntins;
-    var noBtn = document.getElementById(NO_MUNTIN_ID);
-    var yesBtn = document.getElementById(YES_MUNTIN_ID);
-
-    if (noBtn) {
-      if (!showMuntins) noBtn.classList.add(MUNTIN_ACTIVE_CLASS);
-      else noBtn.classList.remove(MUNTIN_ACTIVE_CLASS);
-    }
-    if (yesBtn) {
-      if (showMuntins) yesBtn.classList.add(MUNTIN_ACTIVE_CLASS);
-      else yesBtn.classList.remove(MUNTIN_ACTIVE_CLASS);
-    }
-  }
-
-  function renderMuntinVersion(showMuntins) {
-    if (currentModalIndex === null) return;
-    if (typeof window.build_assembly_svg !== "function") {
-      console.warn("build_assembly_svg not available for muntin toggle.");
-      return;
-    }
-    try {
-      window.build_assembly_svg(currentModalIndex, showMuntins);
-    } catch (err) {
-      console.error("Muntin toggle render failed:", err);
-    }
-  }
-
-  function initMuntinToggle() {
-    var noBtn = document.getElementById(NO_MUNTIN_ID);
-    var yesBtn = document.getElementById(YES_MUNTIN_ID);
-
-    if (noBtn) {
-      noBtn.addEventListener("click", function(e) {
-        e.preventDefault();
-        if (!currentMuntinState) return;
-        setMuntinToggleState(false);
-        renderMuntinVersion(false);
-      });
-    }
-
-    if (yesBtn) {
-      yesBtn.addEventListener("click", function(e) {
-        e.preventDefault();
-        if (currentMuntinState) return;
-        setMuntinToggleState(true);
-        renderMuntinVersion(true);
-      });
-    }
-  }
-
-  // =========================================
-  // DOOR BORE TOGGLE
-  // =========================================
-  function setDoorBoreToggleState(side) {
-    currentDoorBore = side;
-    var leftBtn = document.getElementById(DOOR_BORE_LEFT_ID);
-    var rightBtn = document.getElementById(DOOR_BORE_RIGHT_ID);
-
-    if (leftBtn) {
-      if (side === "left") leftBtn.classList.add(DOOR_BORE_ACTIVE_CLASS);
-      else leftBtn.classList.remove(DOOR_BORE_ACTIVE_CLASS);
-    }
-    if (rightBtn) {
-      if (side === "right") rightBtn.classList.add(DOOR_BORE_ACTIVE_CLASS);
-      else rightBtn.classList.remove(DOOR_BORE_ACTIVE_CLASS);
-    }
-  }
-
-  function applyDoorBoreToggle(side) {
-    if (currentModalIndex === null) return;
-    var solution = window.comboSolutions[currentModalIndex];
-    if (!solution) return;
-
-    solution.door_bore = side;
-
-    // Invalidate assembly caches so next full render re-serializes with correct state
-    delete solution.assembly_svg;
-    delete solution.assembly_svg_no_muntins;
-
-    // Update the live mounted SVG directly (no full re-render needed)
-    if (typeof window.updateBoreVisibility === "function") {
-      window.updateBoreVisibility(side);
-    }
-
-    // Hinges always opposite bore on single doors
-    if (typeof window.updateHingeVisibility === "function") {
-      window.updateHingeVisibility("single_door", side);
-    }
-
-    // Update door type label in modal grid (Left-Hand ↔ Right-Hand)
-    updateDoorTypeLabelsInModal(side);
-  }
-
-  function initDoorBoreToggle() {
-    var leftBtn = document.getElementById(DOOR_BORE_LEFT_ID);
-    var rightBtn = document.getElementById(DOOR_BORE_RIGHT_ID);
-
-    if (leftBtn) {
-      leftBtn.addEventListener("click", function(e) {
-        e.preventDefault();
-        if (currentDoorBore === "left") return;
-        setDoorBoreToggleState("left");
-        applyDoorBoreToggle("left");
-      });
-    }
-
-    if (rightBtn) {
-      rightBtn.addEventListener("click", function(e) {
-        e.preventDefault();
-        if (currentDoorBore === "right") return;
-        setDoorBoreToggleState("right");
-        applyDoorBoreToggle("right");
-      });
-    }
-  }
-
-  /** Show/hide #choose-door-bore and set toggle to match solution. */
-  function configureDoorBoreForModal(solution) {
-    var chooser = document.getElementById(CHOOSE_DOOR_BORE_ID);
-    if (!chooser) return;
-
-    if (solutionHasSingleDoor(solution)) {
-      ensureDoorBoreDefault(solution);
-      chooser.style.display = "flex";
-      setDoorBoreToggleState(solution.door_bore);
-    } else {
-      chooser.style.display = "none";
-    }
-  }
-
-  // =========================================
-  // HARDWARE COLOR SELECTOR
-  // =========================================
-
-  /** Build <select> inside #hardware-selector from HARDWARE_COLORS, attach change handler.
-   *  Copies computed styles from #selector-format placeholder, then removes it. */
-  function initHardwareColorSelector() {
-    var container = document.getElementById(HARDWARE_SELECTOR_ID);
-    if (!container) return;
-
-    var colors = window.HARDWARE_COLORS;
-    if (!Array.isArray(colors) || colors.length === 0) return;
-
-    // Copy styles from Webflow placeholder before removing it
-    var placeholder = document.getElementById("selector-format");
-    var styleProps = {};
-    if (placeholder) {
-      var cs = window.getComputedStyle(placeholder);
-      var props = [
-        "fontFamily", "fontSize", "fontWeight", "fontStyle",
-        "lineHeight", "letterSpacing", "textTransform",
-        "color", "backgroundColor",
-        "padding", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
-        "margin", "marginTop", "marginRight", "marginBottom", "marginLeft",
-        "border", "borderRadius",
-        "width", "maxWidth", "minWidth",
-        "height", "maxHeight", "minHeight",
-        "textAlign"
-      ];
-      for (var p = 0; p < props.length; p++) {
-        styleProps[props[p]] = cs[props[p]];
-      }
-      placeholder.remove();
-    }
-
-    var sel = document.createElement("select");
-    sel.id = "hardware-color-select";
-
-    // Apply copied styles
-    for (var key in styleProps) {
-      if (styleProps.hasOwnProperty(key)) {
-        sel.style[key] = styleProps[key];
-      }
-    }
-    sel.style.cursor = "pointer";
-
-    for (var i = 0; i < colors.length; i++) {
-      var opt = document.createElement("option");
-      opt.value = colors[i].name;
-      opt.textContent = colors[i].name;
-      sel.appendChild(opt);
-    }
-
-    sel.addEventListener("change", function() {
-      if (currentModalIndex === null) return;
-      var solution = window.comboSolutions[currentModalIndex];
-      if (!solution) return;
-
-      solution.hardware_color = sel.value;
-
-      // Invalidate assembly caches
-      delete solution.assembly_svg;
-      delete solution.assembly_svg_no_muntins;
-
-      // Update hinge color on the live DOM
-      var hex = resolveHardwareHex(sel.value);
-      if (typeof window.updateHingeColor === "function") {
-        window.updateHingeColor(hex);
-      }
-    });
-
-    container.appendChild(sel);
-  }
-
-  /** Show/hide #hardware-color-wrapper and reset hardware color to Chrome on modal open. */
-  function configureHardwareColorForModal(solution) {
-    var wrapper = document.getElementById(HARDWARE_COLOR_WRAPPER_ID);
-    if (!wrapper) return;
-
-    if (solutionHasAnyDoor(solution)) {
-      // Reset solution + selector to Chrome on every modal open
-      solution.hardware_color = "Chrome";
-      solution.assembly_svg = null;
-      solution.assembly_svg_no_muntins = null;
-      wrapper.style.display = "flex";
-
-      var sel = document.getElementById("hardware-color-select");
-      if (sel) sel.value = "Chrome";
-    } else {
-      wrapper.style.display = "none";
-    }
-  }
-
-  /** Show #hardware_wrapper_div only for solutions with any door (single or double). */
-  function configureHardwareWrapperForModal(solution) {
-    var wrapper = document.getElementById(HARDWARE_WRAPPER_DIV_ID);
-    if (!wrapper) return;
-    wrapper.style.display = solutionHasAnyDoor(solution) ? "flex" : "none";
-  }
-
-  /** Show #dbl-door-wrapper only for double_door solutions. */
-  function configureDblDoorWrapperForModal(solution) {
-    var wrapper = document.getElementById(DBL_DOOR_WRAPPER_ID);
-    if (!wrapper) return;
-    wrapper.style.display = solutionHasDoubleDoor(solution) ? "flex" : "none";
-  }
 
   // =========================================
   // DECIMAL → FRACTION HELPER
@@ -792,135 +390,6 @@
     const frac = FRACTION_TABLE.find(([v]) => Math.abs(v - rem) < 0.001);
     const fracStr = frac ? frac[1] : rem.toString();
     return whole > 0 ? whole + '-' + fracStr + '"' : fracStr + '"';
-  }
-
-  // =========================================
-  // MODAL DATA GRID
-  // =========================================
-  const MODAL_SUMMARY_SELECTOR = '[data-modal-summary="section"]';
-  const MODAL_GRID_SELECTOR    = '[data-modal-grid="section"]';
-  const MODAL_ROW_SELECTOR     = '[data-modal-row="template"]';
-  const MODAL_NOTES_SELECTOR   = '[data-modal-notes="row"]';
-  const MODAL_ICON_SELECTOR    = '[data-modal-icon="img"]';
-
-  function setModalIcon(panel, iconPath) {
-    const wrapper = panel.querySelector(MODAL_ICON_SELECTOR);
-    if (!wrapper) return;
-
-    const img = wrapper.querySelector('[data-field="icon"]');
-    if (!img) return;
-
-    if (!iconPath) {
-      img.removeAttribute("src");
-      img.alt = "";
-      return;
-    }
-
-    const raw = String(iconPath).trim();
-    const looksAbsolute = /^https?:\/\//i.test(raw);
-
-    let resolved = raw;
-
-    if (!looksAbsolute) {
-      const filename = normalizeIconKey(raw);
-      if (ICON_MAP[filename]) {
-        resolved = ICON_MAP[filename];
-      } else {
-        resolved = new URL(raw, window.location.origin).href;
-        console.warn("Modal icon not found in registry; fallback:", resolved, "original:", raw);
-      }
-    }
-
-    img.alt = "Arrangement icon";
-    img.onerror = () => console.warn("Modal icon failed to load:", resolved, "original:", raw);
-    img.src = resolved;
-  }
-
-  function clearModalGridRows() {
-    const panel = document.getElementById(MODAL_PANEL_ID);
-    if (!panel) return;
-    const gridBlock = panel.querySelector(MODAL_GRID_SELECTOR);
-    if (!gridBlock) return;
-    gridBlock.querySelectorAll("[data-pos]").forEach(r => r.remove());
-    gridBlock.querySelectorAll("[data-unit-notes]").forEach(r => r.remove());
-  }
-
-  function populateModalGrid(idx) {
-    const sol = window.comboSolutions[idx];
-    if (!sol) {
-      console.warn("populateModalGrid: no solution at index", idx);
-      return;
-    }
-
-    const panel = document.getElementById(MODAL_PANEL_ID);
-    if (!panel) return;
-
-    // --- Opening Summary ---
-    const summaryBlock = panel.querySelector(MODAL_SUMMARY_SELECTOR);
-    if (summaryBlock) {
-      setField(summaryBlock, "opening_width",  decimalToFraction(sol.opening_width));
-      setField(summaryBlock, "opening_height", decimalToFraction(sol.opening_height));
-      setField(summaryBlock, "jamb_depth",     decimalToFraction(sol.jamb_depth));
-    }
-
-    // --- Solution Grid ---
-    const gridBlock = panel.querySelector(MODAL_GRID_SELECTOR);
-    if (!gridBlock) return;
-
-    // Icon
-    setModalIcon(panel, sol.icon);
-
-    // Remove previously cloned rows (keep template)
-    gridBlock.querySelectorAll("[data-pos]").forEach(r => r.remove());
-    gridBlock.querySelectorAll("[data-unit-notes]").forEach(r => r.remove());
-
-    const rowTemplate = gridBlock.querySelector(MODAL_ROW_SELECTOR);
-    if (!rowTemplate) return;
-
-    rowTemplate.style.display = "none";
-    const rowContainer = rowTemplate.parentElement;
-    const notesRow = gridBlock.querySelector(MODAL_NOTES_SELECTOR);
-    const grid = sol.solution_grid || {};
-
-    // --- Unit Notes (above bottom notes row) ---
-    const unitNotesValue = grid.unit_notes ?? "";
-    if (unitNotesValue.trim() && notesRow) {
-      const unitNotesClone = notesRow.cloneNode(true);
-      unitNotesClone.setAttribute("data-unit-notes", "row");
-      unitNotesClone.removeAttribute("data-modal-notes");
-      setField(unitNotesClone, "notes", unitNotesValue);
-      if (rowContainer && notesRow) rowContainer.insertBefore(unitNotesClone, notesRow);
-    }
-
-    POS_ORDER.forEach((posKey) => {
-      const rowData = grid[posKey];
-      if (!rowData) return;
-
-      const row = rowTemplate.cloneNode(true);
-      row.style.display = "";
-      row.removeAttribute("data-modal-row");
-      row.setAttribute("data-pos", posKey);
-
-      stripWebflowInteractionIds(row);
-
-      setField(row, "row",              rowData.row);
-      setField(row, "building_block",   rowData.building_block);
-      setField(row, "order_dims",       rowData.order_dims);
-      setField(row, "quantity",         rowData.quantity);
-      var lnVal = rowData.line_notes != null ? String(rowData.line_notes) : "";
-      setField(row, "line_notes", lnVal.replace("XX", resolveDoorTypeLabel(sol, "modal")));
-
-      if (notesRow && notesRow.parentElement === rowContainer) {
-        rowContainer.insertBefore(row, notesRow);
-      } else {
-        rowContainer.appendChild(row);
-      }
-    });
-
-    // --- Notes ---
-    if (notesRow) {
-      setField(notesRow, "notes", grid.solution_notes ?? "");
-    }
   }
 
   // =========================================
@@ -1124,19 +593,6 @@
     return (side === "left") ? "Left-Hand" : "Right-Hand";
   }
 
-  /** Update line_notes labels in the modal grid when bore side toggles.
-   *  Swaps "Left-Hand" ↔ "Right-Hand" in all modal [data-field="line_notes"] elements. */
-  function updateDoorTypeLabelsInModal(side) {
-    var panel = document.getElementById(MODAL_PANEL_ID);
-    if (!panel) return;
-    var duhEls = panel.querySelectorAll('[data-field="line_notes"]');
-    var newLabel = (side === "left") ? "Left-Hand" : "Right-Hand";
-    var oldLabel = (side === "left") ? "Right-Hand" : "Left-Hand";
-    for (var i = 0; i < duhEls.length; i++) {
-      duhEls[i].textContent = duhEls[i].textContent.replace(oldLabel, newLabel);
-    }
-  }
-
   /** Look up hardware hex color from HARDWARE_COLORS by name. Defaults to Chrome. */
   function resolveHardwareHex(colorName) {
     var colors = window.HARDWARE_COLORS;
@@ -1324,7 +780,7 @@
     hideSolutionsArea();
     clearNonTemplateCards();
     hideWebflowPanels(form);
-    closeModal();
+    if (typeof window._comboCalc.closeModal === "function") window._comboCalc.closeModal();
 
     window.job_id = null;
     window.comboSolutions = [];
@@ -1340,10 +796,7 @@
   function init() {
     buildIconMapFromRegistry();
     hideSolutionsArea();
-    initModalBehavior();
-    initMuntinToggle();
-    initDoorBoreToggle();
-    initHardwareColorSelector();
+    // Modal init moved to calc-modal.js
 
     hideFormBlocker();
 
@@ -1478,6 +931,26 @@
       }
     }, true);
   }
+
+  // =========================================
+  // SHARED UTILITY NAMESPACE
+  // Exposed for calc-modal.js and other modules
+  // =========================================
+  window._comboCalc = {
+    setField:                     setField,
+    stripWebflowInteractionIds:   stripWebflowInteractionIds,
+    POS_ORDER:                    POS_ORDER,
+    normalizeIconKey:             normalizeIconKey,
+    ICON_MAP:                     ICON_MAP,
+    decimalToFraction:            decimalToFraction,
+    FRACTION_TABLE:               FRACTION_TABLE,
+    resolveDoorTypeLabel:         resolveDoorTypeLabel,
+    solutionHasSingleDoor:        solutionHasSingleDoor,
+    solutionHasDoubleDoor:        solutionHasDoubleDoor,
+    solutionHasAnyDoor:           solutionHasAnyDoor,
+    ensureDoorBoreDefault:        ensureDoorBoreDefault,
+    resolveHardwareHex:           resolveHardwareHex,
+  };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

@@ -8,7 +8,8 @@
  * Purpose:
  * - Orchestrates generation of per-position “building block” SVGs and assembles them into a single combined SVG.
  * - Uses a named assembly template (assembly_template) and a template “ops” sequence (place/snap/validateSnap) to compute layout.
- * - Inserts the assembled SVG as an inline DOM <svg> into div#explore, and stores the serialized SVG on the solution object.
+ * - Inserts the assembled SVG as an inline DOM <svg> into a configurable mount target (defaults to div#explore),
+ *   and stores the serialized SVG on the solution object.
  *
  * Context:
  * - Browser-only drop-in intended for Webflow pages where Node.js filesystem I/O is not available.
@@ -36,14 +37,15 @@
  *
  * DOM Contract:
  * - Required element:
- *   - div#explore (wrapper where the assembled inline SVG is mounted).
+ *   - Mount target element (defaults to div#explore if no mountTarget param is provided).
+ *     Can be any container <div>; passed as string ID or DOM element to build_assembly_svg().
  *
  * - Assumptions:
- *   - #explore exists by the time build_assembly_svg(index) is called.
- *   - #explore has a fixed height (guaranteed by page/CSS), enabling width="100%" + height="100%" SVG sizing.
+ *   - Mount target exists by the time build_assembly_svg(index) is called.
+ *   - Mount target has a fixed height (guaranteed by page/CSS), enabling width="100%" + height="100%" SVG sizing.
  *
  * - IDs refer to:
- *   - #explore is a wrapper <div> element ID (not a Webflow input/label ID).
+ *   - #explore (default) is a wrapper <div> element ID (not a Webflow input/label ID).
  *
  * Data Contract:
  * - Required globals:
@@ -102,32 +104,36 @@
  *
  * Public API:
  * - Global functions exposed:
- *     build_assembly_svg(index, muntins)
- *     updateBoreVisibility(boreSide)
- *       - boreSide ("left"|"right"): sets display on [data-bore] groups in the mounted #explore SVG.
+ *     build_assembly_svg(index, muntins, mountTarget)
+ *     updateBoreVisibility(boreSide, container)
+ *       - boreSide ("left"|"right"): sets display on [data-bore] groups in the mounted SVG.
+ *       - container (optional HTMLElement): defaults to last mount target or #explore.
  *       - Called automatically after every mount (cached or fresh) using solution.door_bore || "right".
- *       - Also called by calc-combo-results.js door bore toggle for instant DOM-only switching.
+ *       - Also called by calc-modal.js door bore toggle for instant DOM-only switching.
  *
- *     updateHingeVisibility(construction, boreSide)
+ *     updateHingeVisibility(construction, boreSide, container)
  *       - construction ("single_door"|"double_door"): determines suppression rules.
  *       - boreSide ("left"|"right"): for single_door, hinges shown opposite bore side.
+ *       - container (optional HTMLElement): defaults to last mount target or #explore.
  *       - For double_door: leaf1 left hinges + leaf2 right hinges always shown (outer perimeter).
  *       - Called automatically after every mount and by bore toggle for instant DOM switching.
  *
- *     updateHingeColor(hexColor)
+ *     updateHingeColor(hexColor, container)
  *       - hexColor (string): CSS hex color to apply to all hinge rect fills.
+ *       - container (optional HTMLElement): defaults to last mount target or #explore.
  *       - Called automatically after every mount and by hardware color selector change handler.
  *
  *     build_assembly_svg params:
  *       - index (number): position in window.comboSolutions.
  *       - muntins (boolean, optional): when false, renders with rows=1/cols=1 (no muntins).
  *         Defaults to true (use actual rows/cols) if omitted or undefined.
+ *       - mountTarget (optional): string ID or HTMLElement to mount into; defaults to #explore.
  *       - Passes muntins through to build_block_svgs(index, muntins).
  *       - If a cached assembly SVG exists for the requested muntin state, mounts it
  *         directly from cache (skips full render pipeline).
  *
  * DOM Mutations:
- * - Replaces the contents of div#explore:
+ * - Replaces the contents of the mount target (default div#explore):
  *     - Removes all existing children.
  *     - Appends one inline <svg> element containing translated <g data-pos="posX"> groups.
  *     - If unit_width/unit_height are present, a <g data-role="dimensions"> group is
@@ -155,7 +161,7 @@
  *     window.comboSolutions
  *     window.build_block_svgs
  *
- * - Must be called AFTER the DOM contains div#explore
+ * - Must be called AFTER the DOM contains the mount target element
  *   (e.g., after DOMContentLoaded / Webflow initialization).
  *
  * - Does not auto-run on load; it runs only when build_assembly_svg(index) is invoked.
@@ -181,7 +187,7 @@
  *     - solution.assembly_template missing or not found in ASSEMBLY_TEMPLATES.
  *     - Template-required positions are missing from building_block_svgs.
  *     - Any block SVG is not parseable, not <svg>, or missing valid viewBox.
- *     - div#explore is missing.
+ *     - mount target is missing.
  *     - validateSnap exceeds tolerance.
  *
  * - Current behavior is fail-hard (throw + console error).
@@ -217,31 +223,43 @@
  *     - Writes assembly_svg back onto the solution object.
  *     - Renders result as inline DOM SVG inside #explore.
  */
+/** Last mount container used by build_assembly_svg, for visibility function fallback. */
+var _lastMountContainer = null;
+
+/** Resolves a mount target: DOM element used as-is, string used as getElementById, null/undefined falls back to #explore. */
+function _resolveMountTarget(target) {
+  if (target instanceof HTMLElement) return target;
+  if (typeof target === "string") return document.getElementById(target);
+  return _lastMountContainer || document.getElementById("explore");
+}
+
 /**
- * Sets the visibility of door bore circles in the mounted SVG inside #explore.
+ * Sets the visibility of door bore circles in the mounted SVG.
  * @param {string} boreSide - "left" or "right"
+ * @param {HTMLElement} [container] - optional mount container; defaults to last mount target or #explore
  */
-function updateBoreVisibility(boreSide) {
-  var explore = document.getElementById("explore");
-  if (!explore) return;
-  var boreLeft = explore.querySelector('[data-bore="left"]');
-  var boreRight = explore.querySelector('[data-bore="right"]');
+function updateBoreVisibility(boreSide, container) {
+  var el = container || _resolveMountTarget();
+  if (!el) return;
+  var boreLeft = el.querySelector('[data-bore="left"]');
+  var boreRight = el.querySelector('[data-bore="right"]');
   if (boreLeft) boreLeft.style.display = (boreSide === "left") ? "" : "none";
   if (boreRight) boreRight.style.display = (boreSide === "right") ? "" : "none";
 }
 window.updateBoreVisibility = updateBoreVisibility;
 
 /**
- * Sets the visibility of door hinge groups in the mounted SVG inside #explore.
+ * Sets the visibility of door hinge groups in the mounted SVG.
  * @param {string} construction - "single_door" or "double_door"
  * @param {string} boreSide - "left" or "right" (used for single_door to place hinges opposite bore)
+ * @param {HTMLElement} [container] - optional mount container; defaults to last mount target or #explore
  */
-function updateHingeVisibility(construction, boreSide) {
-  var explore = document.getElementById("explore");
-  if (!explore) return;
+function updateHingeVisibility(construction, boreSide, container) {
+  var el = container || _resolveMountTarget();
+  if (!el) return;
 
-  var hingeLeft = explore.querySelector('[data-hinge="left"]');
-  var hingeRight = explore.querySelector('[data-hinge="right"]');
+  var hingeLeft = el.querySelector('[data-hinge="left"]');
+  var hingeRight = el.querySelector('[data-hinge="right"]');
 
   if (construction === "single_door") {
     // Hinges opposite the bore/handle side
@@ -252,8 +270,8 @@ function updateHingeVisibility(construction, boreSide) {
     if (hingeLeft) hingeLeft.style.display = "";
     if (hingeRight) hingeRight.style.display = "none";
     // Leaf2 (right door after rotation): show right hinges only
-    var hingeLeft2 = explore.querySelector('[data-hinge-leaf2="left"]');
-    var hingeRight2 = explore.querySelector('[data-hinge-leaf2="right"]');
+    var hingeLeft2 = el.querySelector('[data-hinge-leaf2="left"]');
+    var hingeRight2 = el.querySelector('[data-hinge-leaf2="right"]');
     if (hingeLeft2) hingeLeft2.style.display = "none";
     if (hingeRight2) hingeRight2.style.display = "";
   }
@@ -261,13 +279,14 @@ function updateHingeVisibility(construction, boreSide) {
 window.updateHingeVisibility = updateHingeVisibility;
 
 /**
- * Updates the fill color of all hinge rects in the mounted SVG inside #explore.
+ * Updates the fill color of all hinge rects in the mounted SVG.
  * @param {string} hexColor - CSS hex color (e.g., "#D7D7D7")
+ * @param {HTMLElement} [container] - optional mount container; defaults to last mount target or #explore
  */
-function updateHingeColor(hexColor) {
-  var explore = document.getElementById("explore");
-  if (!explore) return;
-  var rects = explore.querySelectorAll('[data-hinge] rect, [data-hinge-leaf2] rect');
+function updateHingeColor(hexColor, container) {
+  var el = container || _resolveMountTarget();
+  if (!el) return;
+  var rects = el.querySelectorAll('[data-hinge] rect, [data-hinge-leaf2] rect');
   for (var i = 0; i < rects.length; i++) {
     rects[i].setAttribute("fill", hexColor);
   }
@@ -306,7 +325,7 @@ function getDoorType(solution) {
   return doorType;
 }
 
-function build_assembly_svg(index, muntins) {
+function build_assembly_svg(index, muntins, mountTarget) {
   try {
     // 1) Validate globals / index
     if (!window.comboSolutions || !Array.isArray(window.comboSolutions)) {
@@ -322,6 +341,9 @@ function build_assembly_svg(index, muntins) {
       throw new Error("build_assembly_svg: build_block_svgs(index) must exist as a function");
     }
 
+    // Resolve mount target (string, element, or default to #explore)
+    var resolvedMount = _resolveMountTarget(mountTarget);
+
     var useMuntins = (muntins !== false);
     var assemblyCacheKey = useMuntins ? "assembly_svg" : "assembly_svg_no_muntins";
     var blockCacheKey = useMuntins ? "building_block_svgs" : "building_block_svgs_no_muntins";
@@ -330,22 +352,22 @@ function build_assembly_svg(index, muntins) {
 
     // 2a) If cached assembly SVG exists, mount it directly and return
     if (solution[assemblyCacheKey]) {
-      const cachedExplore = document.getElementById("explore");
-      if (!cachedExplore) throw new Error('build_assembly_svg: could not find div#explore');
-      if (!cachedExplore.style.position) cachedExplore.style.position = "relative";
-      if (!cachedExplore.style.overflow) cachedExplore.style.overflow = "hidden";
-      while (cachedExplore.firstChild) cachedExplore.removeChild(cachedExplore.firstChild);
+      if (!resolvedMount) throw new Error("build_assembly_svg: could not find mount target");
+      _lastMountContainer = resolvedMount;
+      if (!resolvedMount.style.position) resolvedMount.style.position = "relative";
+      if (!resolvedMount.style.overflow) resolvedMount.style.overflow = "hidden";
+      while (resolvedMount.firstChild) resolvedMount.removeChild(resolvedMount.firstChild);
 
       const cachedDoc = new DOMParser().parseFromString(solution[assemblyCacheKey], "image/svg+xml");
       const cachedSvg = document.importNode(cachedDoc.documentElement, true);
-      cachedExplore.appendChild(cachedSvg);
+      resolvedMount.appendChild(cachedSvg);
 
-      updateBoreVisibility(solution.door_bore || "right");
+      updateBoreVisibility(solution.door_bore || "right", resolvedMount);
 
       var cachedDoorType = getDoorType(solution);
       if (cachedDoorType) {
-        updateHingeVisibility(cachedDoorType, solution.door_bore || "right");
-        updateHingeColor(resolveHardwareHexAssembler(solution.hardware_color));
+        updateHingeVisibility(cachedDoorType, solution.door_bore || "right", resolvedMount);
+        updateHingeColor(resolveHardwareHexAssembler(solution.hardware_color), resolvedMount);
       }
 
       return { svgElement: cachedSvg, svgString: solution[assemblyCacheKey], placements: null, template: null };
@@ -553,26 +575,26 @@ function build_assembly_svg(index, muntins) {
     const svgString = new XMLSerializer().serializeToString(root);
     solution[assemblyCacheKey] = svgString;
 
-    // 10) INSERT INLINE SVG into #explore (DOM element insertion)
-    const explore = document.getElementById("explore");
-    if (!explore) {
-      throw new Error('build_assembly_svg: could not find div#explore');
+    // 10) INSERT INLINE SVG into mount target (DOM element insertion)
+    if (!resolvedMount) {
+      throw new Error("build_assembly_svg: could not find mount target");
     }
+    _lastMountContainer = resolvedMount;
 
     // Ensure wrapper behaves like a container
     // (Won’t override your CSS if you already set it.)
-    if (!explore.style.position) explore.style.position = "relative";
-    if (!explore.style.overflow) explore.style.overflow = "hidden";
+    if (!resolvedMount.style.position) resolvedMount.style.position = "relative";
+    if (!resolvedMount.style.overflow) resolvedMount.style.overflow = "hidden";
 
-    while (explore.firstChild) explore.removeChild(explore.firstChild);
-    explore.appendChild(root);
+    while (resolvedMount.firstChild) resolvedMount.removeChild(resolvedMount.firstChild);
+    resolvedMount.appendChild(root);
 
-    updateBoreVisibility(solution.door_bore || "right");
+    updateBoreVisibility(solution.door_bore || "right", resolvedMount);
 
     var freshDoorType = getDoorType(solution);
     if (freshDoorType) {
-      updateHingeVisibility(freshDoorType, solution.door_bore || "right");
-      updateHingeColor(resolveHardwareHexAssembler(solution.hardware_color));
+      updateHingeVisibility(freshDoorType, solution.door_bore || "right", resolvedMount);
+      updateHingeColor(resolveHardwareHexAssembler(solution.hardware_color), resolvedMount);
     }
 
     return { svgElement: root, svgString, placements, template: tpl };

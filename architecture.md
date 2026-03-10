@@ -39,7 +39,8 @@ Script delivery is designed for CDN hosting (jsDelivr GitHub-backed) and uses a 
   - Source of truth is `input.checked`; the span class is treated as derived UI.
 - **Timing assumptions:**
   - `calc-query.js` boots on `DOMContentLoaded`, then uses a double `requestAnimationFrame()` before applying resets/rules to avoid Webflow initialization races.
-  - `calc-combo-results.js` boots on `DOMContentLoaded` and assumes templates/modal/form are present by then.
+  - `calc-combo-results.js` boots on `DOMContentLoaded` and assumes templates/form are present by then.
+  - `calc-modal.js` boots on `DOMContentLoaded` and assumes modal DOM elements are present by then; reads `window._comboCalc` (populated by `calc-combo-results.js` which loads earlier).
   - SVG rendering/assembly is **invoked on-demand** (Explore flow); those scripts do not auto-run render on load.
 
 ---
@@ -70,7 +71,18 @@ Script delivery is designed for CDN hosting (jsDelivr GitHub-backed) and uses a 
 │   - polls retrieval endpoint until ready/timeout                    │
 │   - normalizes to window.comboSolutions                             │
 │   - clones template cards/rows into .solutions-list                 │
-│   - wires Explore buttons + modal open/close                        │
+│   - exposes window._comboCalc shared utilities namespace              │
+└───────────────┬────────────────────────────────────────────────────┘
+                │
+                v
+┌────────────────────────────────────────────────────────────────────┐
+│ Modal Control                                                      │
+│  calc-modal.js (UI CONTROLLER)                                     │
+│   - open/close modal, muntin toggle, door bore toggle              │
+│   - hardware color selector, double-door wrapper                   │
+│   - modal data grid population, modal icon                         │
+│   - reads shared utilities from window._comboCalc                  │
+│   - writes closeModal onto _comboCalc for resetUI()                │
 └───────────────┬────────────────────────────────────────────────────┘
                 │ Explore click (data-solution-index)
                 v
@@ -79,6 +91,7 @@ Script delivery is designed for CDN hosting (jsDelivr GitHub-backed) and uses a 
 │  window.build_assembly_svg(index, muntins) (global function)         │
 │   ├─ muntins param: false=no muntins (rows/cols=1), true=actual      │
 │   │  (default true if omitted; Explore click passes false)           │
+│   ├─ optional mountTarget param (defaults to #explore)               │
 │   ├─ checks assembly SVG cache first (instant swap on toggle)        │
 │   ├─ calls window.build_block_svgs(index, muntins)                   │
 │   │    calc-svg-block-builder.js (RENDERER)                          │
@@ -88,7 +101,7 @@ Script delivery is designed for CDN hosting (jsDelivr GitHub-backed) and uses a 
 │   └─ assembles blocks via template ops                               │
 │        calc-svg-block-assembler.js (ORCHESTRATOR)                    │
 │         - uses window.ASSEMBLY_TEMPLATES                             │
-│         - mounts final inline <svg> into div#explore                 │
+│         - mounts final inline <svg> into mountTarget (default #explore) │
 │         - dual cache: assembly_svg / assembly_svg_no_muntins         │
 └────────────────────────────────────────────────────────────────────┘
 
@@ -105,11 +118,12 @@ Assets / Data:
 |---|---|---|---|---|---|---|
 | `calc-bootstrap-loader.js` | ORCHESTRATOR | On load (immediate IIFE) | None directly | DOM: `document.head` | DOM: injects `<script>` tags | Defines `FILE_ORDER` dependency graph; must be the single entry point embed |
 | `calc-query.js` | UI GLUE | On `DOMContentLoaded` | None (runs on load) | DOM: many required IDs (inputs + wrapper DIVs + blockers); Webflow redirected spans (via closest label queries) | DOM: show/hide blockers and wrapper DIVs; programmatic check/uncheck + dispatch events | Must run after Webflow has rendered form DOM; uses double `requestAnimationFrame` |
-| `calc-combo-results.js` | ORCHESTRATOR | On `DOMContentLoaded` | Globals: `window.job_id`, `window.comboSolutions` | DOM: form + solutions list templates + modal + icon registry; Data: endpoints; requires `window.build_assembly_svg` at Explore time | DOM: clones solution cards/rows; shows/hides areas, panels, modal; Data: fills `window.comboSolutions` | Uses network POST + polling; `build_assembly_svg` may load later but must exist before Explore action completes |
+| `calc-combo-results.js` | ORCHESTRATOR | On `DOMContentLoaded` | Globals: `window.job_id`, `window.comboSolutions`, `window._comboCalc` (shared utilities namespace) | DOM: form + solutions list templates + icon registry; Data: endpoints | DOM: clones solution cards/rows; shows/hides areas, panels; Data: fills `window.comboSolutions`; exposes `_comboCalc` with setField, stripWebflowInteractionIds, POS_ORDER, normalizeIconKey, ICON_MAP, decimalToFraction, resolveDoorTypeLabel, solutionHasSingleDoor, solutionHasDoubleDoor, solutionHasAnyDoor, ensureDoorBoreDefault, resolveHardwareHex | Uses network POST + polling; modal logic extracted to `calc-modal.js` |
+| `calc-modal.js` | UI CONTROLLER | On `DOMContentLoaded` | `window._comboCalc.closeModal` | DOM: modal overlay/panel/close + door bore chooser + hardware color selector + muntin toggle + modal data grid; Data: reads `window._comboCalc` utilities, `window.comboSolutions`, `window.build_assembly_svg` | DOM: opens/closes modal, populates modal data grid, toggles muntins/bore/hardware color; Data: updates `solution.door_bore`, `solution.hardware_color` | Requires `calc-combo-results.js` (for `window._comboCalc`); `build_assembly_svg` must exist before Explore |
 | `combo-assembly-templates-json.js` | ASSET/DATA | On load | `window.ASSEMBLY_TEMPLATES` | None | Global data array | Must load before `calc-svg-block-assembler.js` and before any `build_assembly_svg` call |
 | `window-type-a-svg-raw.js` | ASSET/DATA | On load | `window.WINDOW_TYPE_A_SVG_TEXT` | None | Global string | Must load before `calc-svg-block-builder.js` (renderer) |
 | `calc-svg-block-builder.js` | RENDERER | On-demand (when called) | `window.build_block_svgs(index)` | DOM: pattern `<img>` IDs (interior + exterior); Data: `window.WINDOW_TYPE_A_SVG_TEXT`, `window.comboSolutions[index].build_objects`, `solution.location` | Data: creates `solution.building_block_svgs[pos] = svgString`; renders stops for window constructions; swaps to exterior wood tiles when location is "exterior" | Requires template + comboSolutions + pattern images; fail-fast on missing prerequisites |
-| `calc-svg-block-assembler.js` | ORCHESTRATOR | On-demand (when called) | `build_assembly_svg(index, muntins)` (**inferred** global function) | DOM: `div#explore`; Data: `window.ASSEMBLY_TEMPLATES`, `window.comboSolutions`, `window.build_block_svgs` | DOM: mounts inline `<svg>` into `#explore` (with optional dimension annotations when `unit_width`/`unit_height` present); Data: writes `solution.assembly_svg` + returns assembled artifact bundle | Requires templates + renderer + solution store; fail-fast (throws) on issues |
+| `calc-svg-block-assembler.js` | ORCHESTRATOR | On-demand (when called) | `build_assembly_svg(index, muntins, mountTarget)` (global function); `updateBoreVisibility(side, container)`, `updateHingeVisibility(construction, boreSide, container)`, `updateHingeColor(hexColor, container)` | DOM: mount target (default `div#explore`); Data: `window.ASSEMBLY_TEMPLATES`, `window.comboSolutions`, `window.build_block_svgs` | DOM: mounts inline `<svg>` into mount target (with optional dimension annotations when `unit_width`/`unit_height` present); Data: writes `solution.assembly_svg` + returns assembled artifact bundle | Requires templates + renderer + solution store; fail-fast (throws) on issues; optional `mountTarget`/`container` params default to `#explore` for backward compatibility; tracks `_lastMountContainer` for fallback |
 
 ---
 
@@ -144,14 +158,34 @@ Assets / Data:
 - **Created by:** `calc-combo-results.js` after poll success.
 - **Consumed by:**
   - `calc-combo-results.js` for solutions list rendering and Explore button indexing.
+  - `calc-modal.js` for modal data grid population, door bore/hardware color toggles.
   - `calc-svg-block-builder.js` reads `comboSolutions[index].build_objects` and `location`; writes `comboSolutions[index].building_block_svgs`.
-  - `calc-svg-block-assembler.js` reads `comboSolutions[index].assembly_template`, `building_block_svgs`, `unit_width`, `unit_height`, `door_bore`, and `hardware_color`; writes `assembly_svg`. Exposes `window.updateBoreVisibility(side)`, `window.updateHingeVisibility(construction, boreSide)`, and `window.updateHingeColor(hexColor)` for post-mount hardware toggling.
+  - `calc-svg-block-assembler.js` reads `comboSolutions[index].assembly_template`, `building_block_svgs`, `unit_width`, `unit_height`, `door_bore`, and `hardware_color`; writes `assembly_svg`. Exposes `window.updateBoreVisibility(side, container)`, `window.updateHingeVisibility(construction, boreSide, container)`, and `window.updateHingeColor(hexColor, container)` for post-mount hardware toggling (all container params optional, default to `#explore`).
 
 ### `window.job_id`
 - **Name in code:** `window.job_id`
 - **Shape:** Number
 - **Source of truth:** `submitInitialRequest()` response parsing in `calc-combo-results.js`.
 - **Used for:** Polling retrieval endpoint.
+
+### `window._comboCalc` (shared utilities namespace)
+- **Name in code:** `window._comboCalc`
+- **Shape:** Object containing shared utilities and helpers:
+  - `setField(el, text)` — sets text content on a DOM element
+  - `stripWebflowInteractionIds(clone)` — removes Webflow interaction IDs from cloned elements
+  - `POS_ORDER` — array of position keys for iteration order
+  - `normalizeIconKey(str)` — normalizes icon filename to lookup key
+  - `ICON_MAP` — map of icon keys to Webflow-hosted asset URLs
+  - `decimalToFraction(val)` — converts decimal inches to fractional string
+  - `resolveDoorTypeLabel(solution)` — resolves door type label for display
+  - `solutionHasSingleDoor(solution)` — predicate for single-door solutions
+  - `solutionHasDoubleDoor(solution)` — predicate for double-door solutions
+  - `solutionHasAnyDoor(solution)` — predicate for any-door solutions
+  - `ensureDoorBoreDefault(solution)` — ensures door_bore has a default value
+  - `resolveHardwareHex(colorName)` — resolves hardware color name to hex value
+  - `closeModal()` — written by `calc-modal.js` so `resetUI()` in `calc-combo-results.js` can close the modal
+- **Source of truth:** Populated by `calc-combo-results.js`; `closeModal` added by `calc-modal.js`.
+- **Consumed by:** `calc-modal.js` (reads all utilities); `calc-combo-results.js` (reads `closeModal` for `resetUI()`).
 
 ### `solution.solution_grid`
 - **Name in code:** `solution.solution_grid`
@@ -180,7 +214,7 @@ Assets / Data:
 ### `window.HARDWARE_COLORS` (asset data)
 - **Name in code:** `window.HARDWARE_COLORS`
 - **Shape:** Array of `{ name: string, color: string }` objects (e.g., `{ "name": "Chrome", "color": "#D7D7D7" }`).
-- **Used by:** `calc-combo-results.js` (hardware color selector, hex resolution) and `calc-svg-block-builder.js` (hinge fill color).
+- **Used by:** `calc-modal.js` (hardware color selector, hex resolution via `_comboCalc.resolveHardwareHex`) and `calc-svg-block-builder.js` (hinge fill color).
 - **Source of truth:** `combo-assembly-templates-json.js`
 
 ### `window.ASSEMBLY_TEMPLATES` (asset data)
@@ -227,7 +261,7 @@ Full contract documentation in webflow-contract.md
   - finding the closest `<label>` containing the `<input>`
   - then querying `.w-radio-input` or `.w-checkbox-input` inside it
 
-### Solutions Listing / Modal (`calc-combo-results.js`)
+### Solutions Listing (`calc-combo-results.js`) / Modal (`calc-modal.js`)
 **Required element IDs:**
 - Form: `#wf_form_combo`
 - Submit button (preferred): `#submit_query` (fallback: form `button[type="submit"]` or `input[type="submit"]`)
@@ -314,17 +348,18 @@ When `solution.location === "exterior"`, the ext_ wood tile URLs replace their i
      - Stop seconds counter, hide `#wait_message`
      - Show Webflow fail panel (if present), restore submit, hide results + blocker
 
-4. **Explore flow**
+4. **Explore flow** (handled by `calc-modal.js`)
    - A global document click handler (capture) detects clicks on `[data-solution-explore="btn"]`.
    - It opens the modal (`#modal-overlay` display = `flex`) and reads `dataset.solutionIndex`.
    - If `window.build_assembly_svg` is missing, it warns and stops.
    - Configures the door bore chooser: shows `#choose-door-bore` if solution has a single door (defaults `door_bore` per assembly template), hides it otherwise. Sets the bore toggle active class.
    - Configures the hardware color selector: shows `#hardware-color-wrapper` if solution has any door (single or double), sets the `<select>` to the solution's `hardware_color`. Hides it otherwise.
+   - Configures the double-door wrapper visibility.
    - If present, it calls `window.build_assembly_svg(index)` and logs errors if thrown.
    - After SVG mount, calls `window.updateBoreVisibility(solution.door_bore)` and `window.updateHingeVisibility(doorType, boreSide)` to set bore/hinge visibility.
    - After SVG rendering, calls `populateModalGrid(index)` to populate the modal data grid:
      - Sets opening summary fields (opening_width, opening_height, jamb_depth) from the solution object.
-     - Sets icon via `[data-modal-icon="img"]` using the same icon registry resolution.
+     - Sets icon via `[data-modal-icon="img"]` using the same icon registry resolution (via `_comboCalc` utilities).
      - Clones `[data-modal-row="template"]` per position key in `POS_ORDER`, populates `data-field` elements.
      - Populates notes in `[data-modal-notes="row"]`.
      - Fails gracefully (warns) if modal grid template elements are absent.
@@ -334,15 +369,16 @@ When `solution.location === "exterior"`, the ext_ wood tile URLs replace their i
      - click overlay background (target === overlay)
      - press Escape
      - clicks inside `#modal-panel` stop propagation to prevent overlay-close
+   - `closeModal` is written onto `window._comboCalc` so that `resetUI()` in `calc-combo-results.js` can programmatically close the modal (e.g., on new search).
 
 5. **SVG build + assembly**
-   - `build_assembly_svg(index)` (global function) performs:
+   - `build_assembly_svg(index, muntins, mountTarget)` (global function) performs:
      - Validate globals / index range
      - Call `window.build_block_svgs(index)` to produce `solution.building_block_svgs`
      - Select layout template from `solution.assembly_template` in `window.ASSEMBLY_TEMPLATES`
      - Parse each block SVG (expects `<svg>` + valid viewBox), compute placements via ops (`place`, `snap`, `validateSnap`)
      - If `unit_width`/`unit_height` are present, append dimension annotation lines and fractional-inch labels; expand viewBox to accommodate
-     - Mount assembled inline `<svg>` into `div#explore`
+     - Mount assembled inline `<svg>` into `mountTarget` (defaults to `div#explore`); stores container as `_lastMountContainer` for subsequent `updateBoreVisibility`/`updateHingeVisibility`/`updateHingeColor` calls
      - Serialize final SVG back into `solution.assembly_svg`
 
 ---
@@ -386,7 +422,10 @@ When `solution.location === "exterior"`, the ext_ wood tile URLs replace their i
   - Missing solutions list or template: `populateSolutionsFromStore()` throws.
   - Invalid `job_id`: throws, restores submit, shows fail panel if present.
   - Poll timeout: throws, restores submit, shows fail panel if present.
+
+- **`calc-modal.js`:**
   - Missing `build_assembly_svg`: Explore opens modal, logs warning, does not render.
+  - Missing modal grid template elements: fails gracefully (warns).
 
 - **SVG renderer/assembler:**
   - `window.build_block_svgs(index)` throws if prerequisites are missing (comboSolutions, build_objects array, template string, pattern images, invalid geometry).
@@ -401,6 +440,7 @@ When `solution.location === "exterior"`, the ext_ wood tile URLs replace their i
    - Pattern preload `<img id="img_*">` exist and have resolved URLs
 3. Confirm globals exist in console:
    - `window.comboSolutions` becomes populated after successful poll
+   - `window._comboCalc` exists after `calc-combo-results.js` loads (shared utilities); `_comboCalc.closeModal` exists after `calc-modal.js` loads
    - `window.WINDOW_TYPE_A_SVG_TEXT` exists before calling build/render
    - `window.ASSEMBLY_TEMPLATES` exists before assembly
    - `window.build_block_svgs` exists (renderer)
@@ -417,13 +457,15 @@ When `solution.location === "exterior"`, the ext_ wood tile URLs replace their i
 `FILE_ORDER`:
 1. `src/calc-query.js`
 2. `src/calc-combo-results.js`
-3. `assets/combo-assembly-templates-json.js`
-4. `assets/window-type-a-svg-raw.js`
-5. `src/calc-svg-block-builder.js`
-6. `src/calc-svg-block-assembler.js`
+3. `src/calc-modal.js`
+4. `assets/combo-assembly-templates-json.js`
+5. `assets/window-type-a-svg-raw.js`
+6. `src/calc-svg-block-builder.js`
+7. `src/calc-svg-block-assembler.js`
 
 ### Why order matters
-- `calc-combo-results.js` sets up the request/poll/render system and calls `build_assembly_svg` on Explore.
+- `calc-combo-results.js` sets up the request/poll/render system and populates `window._comboCalc` shared utilities namespace.
+- `calc-modal.js` reads `window._comboCalc` and wires all modal control logic (open/close, toggles, data grid); writes `closeModal` back onto `_comboCalc` so `resetUI()` can close the modal.
 - `combo-assembly-templates-json.js` must run before assembler calls can succeed.
 - `window-type-a-svg-raw.js` must run before the SVG block renderer can parse the template.
 - `calc-svg-block-builder.js` must exist before `build_assembly_svg` is invoked (assembler calls `window.build_block_svgs`).
@@ -460,8 +502,12 @@ When `solution.location === "exterior"`, the ext_ wood tile URLs replace their i
 - `calc-combo-results.js`:
   - Intercepts form submit and expects to be the only submission path (preventDefault).
   - Solutions are displayed only after successful poll; `#solutions_area` stays hidden otherwise.
-  - Explore buttons must carry a valid `data-solution-index` pointing into `window.comboSolutions`.
+  - Exposes `window._comboCalc` namespace with shared utilities consumed by `calc-modal.js`.
   - Template elements remain as templates and are not removed; clones are generated per solution.
+- `calc-modal.js`:
+  - Explore buttons must carry a valid `data-solution-index` pointing into `window.comboSolutions`.
+  - Depends on `window._comboCalc` being populated before it boots (enforced by load order).
+  - Writes `closeModal` onto `_comboCalc` for cross-module access by `resetUI()`.
 - `calc-svg-block-builder.js`:
   - Rendering is driven only by `comboSolutions[index].build_objects`.
   - Template SVG IDs in `window.WINDOW_TYPE_A_SVG_TEXT` are treated as a stable API.
@@ -471,6 +517,7 @@ When `solution.location === "exterior"`, the ext_ wood tile URLs replace their i
   - Template selection uses only `solution.assembly_template`.
   - Layout uses only template op sequence + block viewBox dimensions.
   - Output mounts translated `<g data-pos="...">` groups (no nested `<svg>` tags).
+  - `mountTarget` and `container` params are optional; all default to `#explore` for backward compatibility. A module-level `_lastMountContainer` tracks the most recent mount for fallback in update functions.
   - Height dimension arrow is anchored at the bottom of the drawing and extends upward by `placements["pos2"].h + placements["pos5"].h` (pos5 included only when it exists and its construction is not `"head_detail"`). This position-based rule aligns the arrow with the actual unit blocks regardless of template letter.
   - When a head_detail placement exists (pos5 or pos7), a "Head Detail" label with a short horizontal arrow is drawn to the right of the drawing.
 
@@ -497,15 +544,21 @@ When `solution.location === "exterior"`, the ext_ wood tile URLs replace their i
   - Runtime truth will depend on the retrieval payload. If payload ever omits `build_objects`, renderer will throw.
 
 - **`build_assembly_svg` exposure**
-  - `calc-svg-block-assembler.js` defines `function build_assembly_svg(index) { ... }` at top scope.
-  - `calc-combo-results.js` calls `window.build_assembly_svg(idx)`.
+  - `calc-svg-block-assembler.js` defines `function build_assembly_svg(index, muntins, mountTarget) { ... }` at top scope.
+  - `calc-modal.js` calls `window.build_assembly_svg(idx)`.
   - In non-module scripts, a top-level function typically becomes `window.build_assembly_svg` (**inferred**). If this file is ever converted to a module or wrapped, that assumption would break.
 
 ---
 
 ## Change Log (Architecture)
 
-- **v0 (current)**
+- **v1 (current)**
+  - Extracted modal control logic from `calc-combo-results.js` into new `calc-modal.js` (UI CONTROLLER).
+  - Introduced `window._comboCalc` shared utilities namespace for cross-module communication.
+  - Parameterized `build_assembly_svg` mount target and `updateBore/Hinge` container for reuse flexibility.
+  - Updated `FILE_ORDER` to 7 entries (added `src/calc-modal.js` at position 3).
+
+- **v0**
   - Browser-only Webflow-embedded system using sequential CDN script loading.
   - Webflow form gating rules engine (`calc-query.js`) with redirected-input syncing.
   - Async request → poll pipeline normalizing results to `window.comboSolutions` and rendering a solutions list from Webflow templates.
