@@ -48,6 +48,7 @@
  *  - Selectors / structural assumptions (inferred from code):
  *    - [data-field="wait_text"]         (text element inside #wait_message; receives rotating wait messages during polling)
  *    - .solutions-list                  (container list where solution cards are appended)
+ *    - #key_row                         (key/header row; hidden original, cloned above each solution card)
  *    - [data-solution-card=”template”]  (template “solution card” to clone per solution)
  *    - Within each cloned card:
  *      - [data-solution-row=”template”] (template row for solution_grid positions to clone)
@@ -84,7 +85,7 @@
  *      - assembly_no or arrangement_no (number/string)
  *      - icon (string: filename, relative path, or absolute URL)
  *      - solution_grid (object) containing:
- *        - unit_notes (string) unit dimension text; rendered above position rows
+ *        - unit_notes (string) unit dimension text; rendered above solution_notes row
  *        - solution_notes (string) gap/planning info; rendered below position rows
  *        - position keys (all optional): pos2, pos1, pos3, pos13, pos5, pos4, pos6, pos46, each containing:
  *          - row, building_block, order_dims, quantity, line_notes
@@ -139,12 +140,12 @@
  *      - populating [data-field="..."] nodes with solution_grid values
  *      - line_notes "XX" marker replaced: "Single-Hung"/"Double-Hung" in listing cards,
  *        "Left-Hand"/"Right-Hand" in modal (toggles with bore side)
- *      - cloning summary row for unit_notes (above position rows) and solution_notes (below)
+ *      - cloning summary row for unit_notes (above solution_notes) and solution_notes (below position rows)
  *      - setting icon <img data-field="icon"> src via ICON_MAP (or fallback resolution)
  *    - Modal overlay display toggled by openModal/closeModal.
  *    - Modal data grid:
  *      - populateModalGrid(idx) populates [data-modal-summary], sets icon via [data-modal-icon],
- *        clones [data-modal-notes] for unit_notes (top) and solution_notes (bottom) around position rows.
+ *        clones [data-modal-notes] for unit_notes (above solution_notes) and solution_notes (bottom) in modal grid.
  *      - closeModal() clears cloned modal grid rows ([data-pos] and [data-unit-notes]) to prevent stale data.
  *
  *  Data Produced:
@@ -881,14 +882,14 @@
     const notesRow = gridBlock.querySelector(MODAL_NOTES_SELECTOR);
     const grid = sol.solution_grid || {};
 
-    // --- Unit Notes (top of grid) ---
+    // --- Unit Notes (above bottom notes row) ---
     const unitNotesValue = grid.unit_notes ?? "";
     if (unitNotesValue.trim() && notesRow) {
       const unitNotesClone = notesRow.cloneNode(true);
       unitNotesClone.setAttribute("data-unit-notes", "row");
       unitNotesClone.removeAttribute("data-modal-notes");
       setField(unitNotesClone, "notes", unitNotesValue);
-      if (rowContainer) rowContainer.insertBefore(unitNotesClone, rowContainer.firstChild);
+      if (rowContainer && notesRow) rowContainer.insertBefore(unitNotesClone, notesRow);
     }
 
     POS_ORDER.forEach((posKey) => {
@@ -1215,7 +1216,7 @@
     clone.removeAttribute("data-solution-summary");
     setField(clone, "summary", unitNotesValue);
     const rowsParent = summaryRow.parentElement;
-    if (rowsParent) rowsParent.insertBefore(clone, rowsParent.firstChild);
+    if (rowsParent) rowsParent.insertBefore(clone, summaryRow);
   }
 
   function buildRowsInCard(card, solutionGrid, solution) {
@@ -1271,6 +1272,7 @@
     $all("[data-solution-card]", list).forEach((card) => {
       if (card.getAttribute("data-solution-card") !== "template") card.remove();
     });
+    $all("[data-key-row]", list).forEach((r) => r.remove());
   }
 
   function populateSolutionsFromStore() {
@@ -1283,7 +1285,19 @@
     clearNonTemplateCards();
     template.style.display = "none";
 
+    const keyRow = document.getElementById("key_row");
+    if (keyRow) keyRow.style.display = "none";
+
     window.comboSolutions.forEach((sol, idx) => {
+      // Clone key row above each solution card
+      if (keyRow) {
+        const keyClone = keyRow.cloneNode(true);
+        keyClone.removeAttribute("id");
+        keyClone.setAttribute("data-key-row", "clone");
+        keyClone.style.display = "";
+        list.appendChild(keyClone);
+      }
+
       const card = template.cloneNode(true);
       card.style.display = "";
       card.setAttribute("data-solution-card", `solution-${idx + 1}`);
