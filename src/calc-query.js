@@ -96,12 +96,14 @@
  *      OUT=DOOR -> show door detail (if advanced checked); hide CO detail.
  *      Switching OUT from CO -> DOOR -> performs a FULL Section C reset.
  *  - Door width logic:
- *      dwho_system_decides -> hide door width scope + msmt; clear dws radios; reset door width selects.
+ *      dwho_system_decides -> on transition: hide door width scope + msmt; clear dws radios; reset door width selects.
  *      dwho_user_decides -> show scope; reveal msmt only if dws_* chosen.
- *      dws_slab_dim -> filter door_width_inch to standard slab widths (24,28,30,32,36,48,56,60,64,72);
+ *      dws_slab_dim -> on transition: filter door_width_inch to standard slab widths (24,28,30,32,36,48,56,60,64,72);
  *                      set door_width_frac to 0 and hide it.
- *      dws_unit_dim -> restore all original door_width_inch options; show door_width_frac.
- *      Any higher-tier reset (Section C reset, CO mode, system-decides) restores clean initial state.
+ *      dws_unit_dim -> on transition: restore all original door_width_inch options; show door_width_frac.
+ *      Door width selects are only reset on state transitions (not on every render cycle),
+ *      so unrelated changes (e.g. gap checkboxes) do not disturb user-selected values.
+ *      Any higher-tier reset (Section C reset, CO mode entry) restores clean initial state.
  *  - Advanced:
  *      advanced_check_box gates visibility of door_detail_wrapper, co_detail_wrapper,
  *      and gap_wrapper_div (which contains the specify-gaps checkboxes and measurement inputs).
@@ -339,6 +341,7 @@
   // ---- Mode trackers ----
   let lastDwhoMode = null; // "system" | "user" | null
   let lastOutMode = null; // "door" | "co" | null
+  let lastDwsMode = null; // "slab" | "unit" | null — tracks door width scope for transition detection
   let lastAdvancedState = false; // tracks advanced checkbox for transition detection
   let doorWidthInchOriginalOptions = null; // snapshot of original <option> elements, set at boot
 
@@ -379,6 +382,7 @@
 
     lastDwhoMode = null;
     lastOutMode = null;
+    lastDwsMode = null;
     lastAdvancedState = false;
   };
 
@@ -442,10 +446,13 @@
     const mode = currentDwhoMode();
 
     if (mode === "system") {
-      hideDiv(IDS.divDoorWidthScope);
-      hideDiv(IDS.divDoorWidthMsmt);
-      hardUncheckMany([IDS.dwsUnitDim, IDS.dwsSlabDim]);
-      resetDoorWidthSelects();
+      if (lastDwhoMode !== "system") {
+        hideDiv(IDS.divDoorWidthScope);
+        hideDiv(IDS.divDoorWidthMsmt);
+        hardUncheckMany([IDS.dwsUnitDim, IDS.dwsSlabDim]);
+        resetDoorWidthSelects();
+        lastDwsMode = null;
+      }
       lastDwhoMode = mode;
       return;
     }
@@ -465,10 +472,15 @@
 
         // Slab dim: filter to standard slab widths, hide frac
         // Unit dim: restore all options, show frac
-        if (isChecked(IDS.dwsSlabDim)) {
-          applySlabWidthFilter();
-        } else {
-          resetDoorWidthSelects();
+        // Only apply on scope transition to avoid resetting user selections
+        const dwsMode = isChecked(IDS.dwsSlabDim) ? "slab" : "unit";
+        if (dwsMode !== lastDwsMode) {
+          if (dwsMode === "slab") {
+            applySlabWidthFilter();
+          } else {
+            resetDoorWidthSelects();
+          }
+          lastDwsMode = dwsMode;
         }
       }
 
@@ -493,14 +505,15 @@
       ]);
 
       hardCheck(IDS.cwhoSystemDecides);
+      resetDoorWidthSelects();
       lastDwhoMode = null;
+      lastDwsMode = null;
     }
 
     // Always enforce CO visibility state
     hideDiv(IDS.divDoorDetail);
     hideDiv(IDS.divDoorWidthScope);
     hideDiv(IDS.divDoorWidthMsmt);
-    resetDoorWidthSelects();
 
     if (isChecked(IDS.advanced)) showDiv(IDS.divCoDetail, "");
     else hideDiv(IDS.divCoDetail);
