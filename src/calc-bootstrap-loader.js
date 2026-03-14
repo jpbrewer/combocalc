@@ -81,7 +81,9 @@
 (function () {
 
   const BASE =
-  "https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@main/";
+  "https://localhost:3000/";  
+  //"https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@main/";
+  
 
   /**
    * IMPORTANT:
