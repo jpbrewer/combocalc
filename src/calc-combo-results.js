@@ -104,7 +104,7 @@
  *  - window._comboCalc          (Object; shared utility namespace for calc-modal.js and other modules)
  *    Contains: setField, stripWebflowInteractionIds, POS_ORDER, normalizeIconKey, ICON_MAP,
  *    decimalToFraction, FRACTION_TABLE, resolveDoorTypeLabel, solutionHasSingleDoor,
- *    solutionHasDoubleDoor, solutionHasAnyDoor, ensureOperatingDoorDefault, resolveHardwareHex.
+ *    solutionHasDoubleDoor, solutionHasAnyDoor, ensureOperatingDoorDefault, resolveHardwareHex, postJson.
  *    calc-modal.js also writes closeModal onto this namespace.
  *  NOTE: Modal behavior (muntin toggle, door bore toggle, hardware color selector,
  *  modal open/close, modal data grid) is now handled by calc-modal.js.
@@ -445,6 +445,27 @@
         (data && typeof data === "object" && data.message) ? data.message :
         (typeof data === "string" && data.trim()) ? data :
         `Request failed (${res.status})`;
+      throw new Error(msg);
+    }
+
+    return data;
+  }
+
+  /** POST a JSON body to a URL; returns parsed response or throws on failure. */
+  async function postJson(url, obj) {
+    var res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(obj),
+    });
+
+    var data = await fetchJsonOrText(res);
+
+    if (!res.ok) {
+      var msg =
+        (data && typeof data === "object" && data.message) ? data.message :
+        (typeof data === "string" && data.trim()) ? data :
+        "Request failed (" + res.status + ")";
       throw new Error(msg);
     }
 
@@ -950,6 +971,7 @@
     solutionHasAnyDoor:           solutionHasAnyDoor,
     ensureOperatingDoorDefault:    ensureOperatingDoorDefault,
     resolveHardwareHex:           resolveHardwareHex,
+    postJson:                     postJson,
   };
 
   if (document.readyState === "loading") {

@@ -264,7 +264,7 @@ Removing fixed height from `#explore` will break layout scaling.
 | `[data-modal-icon="img"]`             | `div`        | Icon wrapper; must contain `<img data-field="icon">`        | `calc-modal.js` | Icon silently not shown                |
 | `[data-modal-row="template"]`         | `div`        | Row template; cloned per position key; hidden when template | `calc-modal.js` | Grid rows not rendered                 |
 | `[data-modal-notes="row"]`            | `div`        | Notes row; contains `[data-field="notes"]`                  | `calc-modal.js` | Notes silently not shown               |
-| `[data-modal-configure="btn"]`        | `a`/`button` | "Configure and Buy" button; not wired by JS currently       | Webflow (no JS wiring)  | Button absent; no functional impact    |
+| `[data-modal-configure="btn"]`        | `a`/`button` | Configure button; click stages solution, reconciles muntins, POSTs to Xano | `calc-modal.js` | Button absent; configure flow unavailable |
 
 ## Icon registry
 
@@ -485,6 +485,7 @@ All listeners attached in `init()`, called on `DOMContentLoaded`.
 | `modal-close`     | `click`       | bubble  | Close modal                                              | None                                       |
 | `document`        | `keydown`     | bubble  | Close modal on `Escape`                                  | `e.key === "Escape"`                       |
 | `search_again`    | `click`       | bubble  | `resetUI()`; bound once via `dataset.bound = "1"` guard  | `dataset.bound !== "1"`                    |
+| `[data-modal-configure="btn"]` | `click` | bubble | Stage solution, reconcile muntins, POST to Xano        | `currentModalIndex !== null`               |
 
 ------------------------------------------------------------------------
 
@@ -507,7 +508,7 @@ Full list of `data-*` attributes used by JS as selectors or data carriers:
 | `data-modal-icon`           | `"img"`                   | `calc-modal.js`           | Icon wrapper; must contain `<img data-field="icon">`        |
 | `data-modal-row`            | `"template"` (template); removed from clones | `calc-modal.js` | Clones get `data-pos="posXX"` instead |
 | `data-modal-notes`          | `"row"`                   | `calc-modal.js`           | Notes row inside modal grid                                 |
-| `data-modal-configure`      | `"btn"`                   | Not wired by JS currently | "Configure and Buy" button                                  |
+| `data-modal-configure`      | `"btn"`                   | `calc-modal.js`           | Configure button; stages + POSTs solution to Xano           |
 | `data-w-id`                 | Webflow interaction ID    | `calc-combo-results.js`   | Stripped from cloned cards + explore buttons to prevent Webflow IX errors |
 | `data-bound`                | `"1"`                     | `calc-combo-results.js`   | Guard on `#search_again` to prevent double-binding              |
 

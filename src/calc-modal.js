@@ -6,7 +6,8 @@
  *
  * Purpose:
  *  Controls the Explore modal overlay: opening/closing, muntin toggle, door bore toggle,
- *  hardware color selector, double-door wrapper, modal data grid population, and modal icon.
+ *  hardware color selector, double-door wrapper, modal data grid population, modal icon,
+ *  and Configure button (stages solution, reconciles muntins, POSTs to Xano).
  *  Separated from calc-combo-results.js so the SVG rendering pipeline can be reused
  *  on other pages without requiring modal infrastructure.
  *
@@ -33,6 +34,7 @@
  *    - [data-modal-row="template"]    (template row for solution_grid positions to clone)
  *    - [data-modal-notes="row"]       (notes row template; cloned for unit_notes, original for solution_notes)
  *    - [data-modal-icon="img"]        (icon wrapper; must contain <img data-field="icon">)
+ *    - [data-modal-configure="btn"]   (Configure button; click triggers stage/reconcile/POST)
  *
  * Data Contract:
  *  - Reads window._comboCalc (shared utilities from calc-combo-results.js)
@@ -79,6 +81,8 @@
   var HARDWARE_COLOR_WRAPPER_ID = "hardware-color-wrapper";
   var HARDWARE_SELECTOR_ID     = "hardware-selector";
   var DBL_DOOR_WRAPPER_ID      = "dbl-door-wrapper";
+  var CONFIGURE_BTN_SELECTOR   = '[data-modal-configure="btn"]';
+  var CONFIGURE_ENDPOINT       = "https://api.transomsdirect.com/api:xyi0dc0X/bc_combo_solution_config";
 
   /** Hardcoded styles for the hardware color <select>.
    *  Replaces the old #selector-format placeholder approach (deleted from Webflow). */
@@ -124,6 +128,7 @@
   var solutionHasAnyDoor         = cc.solutionHasAnyDoor;
   var ensureOperatingDoorDefault  = cc.ensureOperatingDoorDefault;
   var resolveHardwareHex         = cc.resolveHardwareHex;
+  var postJson                   = cc.postJson;
 
   // =========================================
   // MODAL OPEN / CLOSE
@@ -462,6 +467,64 @@
   }
 
   // =========================================
+  // CONFIGURE BUTTON
+  // =========================================
+
+  /** Stage a deep copy of the current solution, reconcile muntins, clean, and POST to Xano. */
+  async function handleConfigure() {
+    if (currentModalIndex === null) return;
+    var solution = window.comboSolutions[currentModalIndex];
+    if (!solution) return;
+
+    // 1. Deep copy — never mutate the live comboSolutions array
+    var staged = JSON.parse(JSON.stringify(solution));
+
+    // 2. Reconcile rows/cols based on muntin choice
+    if (staged.muntins === true && Array.isArray(staged.build_objects)) {
+      for (var i = 0; i < staged.build_objects.length; i++) {
+        var bo = staged.build_objects[i];
+        if (bo.suggested_rows != null && bo.suggested_cols != null) {
+          bo.rows = bo.suggested_rows;
+          bo.cols = bo.suggested_cols;
+        }
+      }
+    }
+
+    // 3. Clean solution-level fields
+    delete staged.muntins;
+    delete staged.building_block_svgs;
+    delete staged.building_block_svgs_no_muntins;
+    delete staged.assembly_svg;
+    delete staged.assembly_svg_no_muntins;
+
+    // 4. Clean build_object-level fields
+    if (Array.isArray(staged.build_objects)) {
+      for (var j = 0; j < staged.build_objects.length; j++) {
+        delete staged.build_objects[j].suggested_rows;
+        delete staged.build_objects[j].suggested_cols;
+      }
+    }
+
+    // 5. POST to Xano
+    try {
+      var result = await postJson(CONFIGURE_ENDPOINT, staged);
+      console.log("[calc-modal] Configure POST succeeded:", result);
+    } catch (err) {
+      console.error("[calc-modal] Configure POST failed:", err);
+    }
+  }
+
+  function initConfigureButton() {
+    var btn = document.querySelector(CONFIGURE_BTN_SELECTOR);
+    if (btn) {
+      btn.addEventListener("click", function (e) {
+        e.preventDefault();
+        handleConfigure();
+      });
+    }
+  }
+
+  // =========================================
   // MODAL DATA GRID
   // =========================================
   function setModalIcon(panel, iconPath) {
@@ -609,6 +672,7 @@
     initModalBehavior();
     initMuntinToggle();
     initDoorBoreToggle();
+    initConfigureButton();
   }
 
   if (document.readyState === "loading") {
