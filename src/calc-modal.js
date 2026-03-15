@@ -122,7 +122,7 @@
   var solutionHasSingleDoor      = cc.solutionHasSingleDoor;
   var solutionHasDoubleDoor      = cc.solutionHasDoubleDoor;
   var solutionHasAnyDoor         = cc.solutionHasAnyDoor;
-  var ensureDoorBoreDefault      = cc.ensureDoorBoreDefault;
+  var ensureOperatingDoorDefault  = cc.ensureOperatingDoorDefault;
   var resolveHardwareHex         = cc.resolveHardwareHex;
 
   // =========================================
@@ -135,23 +135,7 @@
     document.body.style.overflow = "hidden";
   }
 
-  function resetHardwareColorToChrome() {
-    // Reset solution object if one is active
-    if (currentModalIndex !== null && window.comboSolutions) {
-      var solution = window.comboSolutions[currentModalIndex];
-      if (solution) {
-        solution.hardware_color = "Chrome";
-        solution.assembly_svg = null;
-        solution.assembly_svg_no_muntins = null;
-      }
-    }
-    // Reset the on-screen selector
-    var sel = document.getElementById("hardware-color-select");
-    if (sel) sel.value = "Chrome";
-  }
-
   function closeModal() {
-    resetHardwareColorToChrome();
     var dblWrapper = document.getElementById(DBL_DOOR_WRAPPER_ID);
     if (dblWrapper) dblWrapper.style.display = "none";
     var overlay = document.getElementById(MODAL_OVERLAY_ID);
@@ -218,13 +202,13 @@
 
       // Set bore and hinge visibility on the mounted SVG
       if (solution && typeof window.updateBoreVisibility === "function") {
-        window.updateBoreVisibility(solution.door_bore || "right");
+        window.updateBoreVisibility(solution.operating_door || "right_hand");
       }
       if (solution && typeof window.updateHingeVisibility === "function") {
         var doorType = solutionHasDoubleDoor(solution) ? "double_door"
                      : solutionHasSingleDoor(solution) ? "single_door" : null;
         if (doorType) {
-          window.updateHingeVisibility(doorType, solution.door_bore || "right");
+          window.updateHingeVisibility(doorType, solution.operating_door || "right_hand");
         }
       }
 
@@ -323,11 +307,11 @@
     var rightBtn = document.getElementById(DOOR_BORE_RIGHT_ID);
 
     if (leftBtn) {
-      if (side === "left") leftBtn.classList.add(DOOR_BORE_ACTIVE_CLASS);
+      if (side === "left_hand") leftBtn.classList.add(DOOR_BORE_ACTIVE_CLASS);
       else leftBtn.classList.remove(DOOR_BORE_ACTIVE_CLASS);
     }
     if (rightBtn) {
-      if (side === "right") rightBtn.classList.add(DOOR_BORE_ACTIVE_CLASS);
+      if (side === "right_hand") rightBtn.classList.add(DOOR_BORE_ACTIVE_CLASS);
       else rightBtn.classList.remove(DOOR_BORE_ACTIVE_CLASS);
     }
   }
@@ -337,7 +321,7 @@
     var solution = window.comboSolutions[currentModalIndex];
     if (!solution) return;
 
-    solution.door_bore = side;
+    solution.operating_door = side;
 
     // Invalidate assembly caches so next full render re-serializes with correct state
     delete solution.assembly_svg;
@@ -364,18 +348,18 @@
     if (leftBtn) {
       leftBtn.addEventListener("click", function (e) {
         e.preventDefault();
-        if (currentDoorBore === "left") return;
-        setDoorBoreToggleState("left");
-        applyDoorBoreToggle("left");
+        if (currentDoorBore === "left_hand") return;
+        setDoorBoreToggleState("left_hand");
+        applyDoorBoreToggle("left_hand");
       });
     }
 
     if (rightBtn) {
       rightBtn.addEventListener("click", function (e) {
         e.preventDefault();
-        if (currentDoorBore === "right") return;
-        setDoorBoreToggleState("right");
-        applyDoorBoreToggle("right");
+        if (currentDoorBore === "right_hand") return;
+        setDoorBoreToggleState("right_hand");
+        applyDoorBoreToggle("right_hand");
       });
     }
   }
@@ -386,9 +370,9 @@
     if (!chooser) return;
 
     if (solutionHasSingleDoor(solution)) {
-      ensureDoorBoreDefault(solution);
+      ensureOperatingDoorDefault(solution);
       chooser.style.display = "flex";
-      setDoorBoreToggleState(solution.door_bore);
+      setDoorBoreToggleState(solution.operating_door);
     } else {
       chooser.style.display = "none";
     }
@@ -449,20 +433,15 @@
     container.appendChild(sel);
   }
 
-  /** Show/hide #hardware-color-wrapper and reset hardware color to Chrome on modal open. */
+  /** Show/hide #hardware-color-wrapper and sync selector to solution.hardware_color on modal open. */
   function configureHardwareColorForModal(solution) {
     var wrapper = document.getElementById(HARDWARE_COLOR_WRAPPER_ID);
     if (!wrapper) return;
 
     if (solutionHasAnyDoor(solution)) {
-      // Reset solution + selector to Chrome on every modal open
-      solution.hardware_color = "Chrome";
-      solution.assembly_svg = null;
-      solution.assembly_svg_no_muntins = null;
       wrapper.style.display = "flex";
-
       var sel = document.getElementById("hardware-color-select");
-      if (sel) sel.value = "Chrome";
+      if (sel) sel.value = solution.hardware_color || "Chrome";
     } else {
       wrapper.style.display = "none";
     }

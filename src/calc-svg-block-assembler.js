@@ -106,14 +106,14 @@
  * - Global functions exposed:
  *     build_assembly_svg(index, muntins, mountTarget)
  *     updateBoreVisibility(boreSide, container)
- *       - boreSide ("left"|"right"): sets display on [data-bore] groups in the mounted SVG.
+ *       - boreSide ("left_hand"|"right_hand"): sets display on [data-bore] groups in the mounted SVG; mapped to "left"/"right" internally.
  *       - container (optional HTMLElement): defaults to last mount target or #explore.
- *       - Called automatically after every mount (cached or fresh) using solution.door_bore || "right".
+ *       - Called automatically after every mount (cached or fresh) using solution.operating_door || "right_hand".
  *       - Also called by calc-modal.js door bore toggle for instant DOM-only switching.
  *
  *     updateHingeVisibility(construction, boreSide, container)
  *       - construction ("single_door"|"double_door"): determines suppression rules.
- *       - boreSide ("left"|"right"): for single_door, hinges shown opposite bore side.
+ *       - boreSide ("left_hand"|"right_hand"): for single_door, hinges shown opposite bore side; mapped to "left"/"right" internally.
  *       - container (optional HTMLElement): defaults to last mount target or #explore.
  *       - For double_door: leaf1 left hinges + leaf2 right hinges always shown (outer perimeter).
  *       - Called automatically after every mount and by bore toggle for instant DOM switching.
@@ -148,6 +148,8 @@
  * - Writes to the solution object (dual-cache for muntin toggle):
  *     comboSolutions[index].assembly_svg           (muntins=true: actual rows/cols)
  *     comboSolutions[index].assembly_svg_no_muntins (muntins=false: rows=1, cols=1)
+ *     comboSolutions[index].muntins                (boolean: customer's last toggle choice;
+ *       written on every call, before cache check, so it always reflects the latest selection)
  *
  * - Return value:
  *     { svgElement, svgString, placements, template }
@@ -241,30 +243,34 @@ function _resolveMountTarget(target) {
 function updateBoreVisibility(boreSide, container) {
   var el = container || _resolveMountTarget();
   if (!el) return;
+  // Map operating_door values to SVG data-bore attribute values
+  var svgSide = boreSide === "left_hand" ? "left" : boreSide === "right_hand" ? "right" : boreSide;
   var boreLeft = el.querySelector('[data-bore="left"]');
   var boreRight = el.querySelector('[data-bore="right"]');
-  if (boreLeft) boreLeft.style.display = (boreSide === "left") ? "" : "none";
-  if (boreRight) boreRight.style.display = (boreSide === "right") ? "" : "none";
+  if (boreLeft) boreLeft.style.display = (svgSide === "left") ? "" : "none";
+  if (boreRight) boreRight.style.display = (svgSide === "right") ? "" : "none";
 }
 window.updateBoreVisibility = updateBoreVisibility;
 
 /**
  * Sets the visibility of door hinge groups in the mounted SVG.
  * @param {string} construction - "single_door" or "double_door"
- * @param {string} boreSide - "left" or "right" (used for single_door to place hinges opposite bore)
+ * @param {string} boreSide - "left_hand" or "right_hand" (used for single_door to place hinges opposite bore)
  * @param {HTMLElement} [container] - optional mount container; defaults to last mount target or #explore
  */
 function updateHingeVisibility(construction, boreSide, container) {
   var el = container || _resolveMountTarget();
   if (!el) return;
+  // Map operating_door values to SVG data-hinge attribute values
+  var svgSide = boreSide === "left_hand" ? "left" : boreSide === "right_hand" ? "right" : boreSide;
 
   var hingeLeft = el.querySelector('[data-hinge="left"]');
   var hingeRight = el.querySelector('[data-hinge="right"]');
 
   if (construction === "single_door") {
     // Hinges opposite the bore/handle side
-    if (hingeLeft) hingeLeft.style.display = (boreSide === "right") ? "" : "none";
-    if (hingeRight) hingeRight.style.display = (boreSide === "left") ? "" : "none";
+    if (hingeLeft) hingeLeft.style.display = (svgSide === "right") ? "" : "none";
+    if (hingeRight) hingeRight.style.display = (svgSide === "left") ? "" : "none";
   } else if (construction === "double_door") {
     // Leaf1 (left door after rotation): show left hinges only
     if (hingeLeft) hingeLeft.style.display = "";
@@ -349,6 +355,7 @@ function build_assembly_svg(index, muntins, mountTarget) {
     var blockCacheKey = useMuntins ? "building_block_svgs" : "building_block_svgs_no_muntins";
 
     const solution = window.comboSolutions[index];
+    solution.muntins = useMuntins;
 
     // 2a) If cached assembly SVG exists, mount it directly and return
     if (solution[assemblyCacheKey]) {
@@ -362,11 +369,11 @@ function build_assembly_svg(index, muntins, mountTarget) {
       const cachedSvg = document.importNode(cachedDoc.documentElement, true);
       resolvedMount.appendChild(cachedSvg);
 
-      updateBoreVisibility(solution.door_bore || "right", resolvedMount);
+      updateBoreVisibility(solution.operating_door || "right_hand", resolvedMount);
 
       var cachedDoorType = getDoorType(solution);
       if (cachedDoorType) {
-        updateHingeVisibility(cachedDoorType, solution.door_bore || "right", resolvedMount);
+        updateHingeVisibility(cachedDoorType, solution.operating_door || "right_hand", resolvedMount);
         updateHingeColor(resolveHardwareHexAssembler(solution.hardware_color), resolvedMount);
       }
 
@@ -589,11 +596,11 @@ function build_assembly_svg(index, muntins, mountTarget) {
     while (resolvedMount.firstChild) resolvedMount.removeChild(resolvedMount.firstChild);
     resolvedMount.appendChild(root);
 
-    updateBoreVisibility(solution.door_bore || "right", resolvedMount);
+    updateBoreVisibility(solution.operating_door || "right_hand", resolvedMount);
 
     var freshDoorType = getDoorType(solution);
     if (freshDoorType) {
-      updateHingeVisibility(freshDoorType, solution.door_bore || "right", resolvedMount);
+      updateHingeVisibility(freshDoorType, solution.operating_door || "right_hand", resolvedMount);
       updateHingeColor(resolveHardwareHexAssembler(solution.hardware_color), resolvedMount);
     }
 

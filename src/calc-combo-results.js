@@ -84,8 +84,8 @@
  *      - opening_width, opening_height, jamb_depth (optional; per-solution override of root values)
  *      - unit_width, unit_height (optional; decimal inches; used for SVG dimension annotations)
  *      - location ("interior" | "exterior" | null; per-solution override of root; determines wood tile set)
- *      - door_bore ("left" | "right" | null; which stile gets the bore hole; defaults per assembly template's door_bore value)
- *      - hardware_color (string | null; hardware color name e.g. "Chrome"; defaults to "Chrome" for solutions with doors)
+ *      - operating_door ("left_hand" | "right_hand" | "none"; which stile gets the bore hole; defaults per assembly template's operating_door value)
+ *      - hardware_color (string; hardware color name e.g. "Chrome"; provided by backend with default)
  *  - Required external function (called on Explore click):
  *    - window.build_assembly_svg(index) must exist for rendering; if missing, current behavior logs a warning and continues.
  *
@@ -104,7 +104,7 @@
  *  - window._comboCalc          (Object; shared utility namespace for calc-modal.js and other modules)
  *    Contains: setField, stripWebflowInteractionIds, POS_ORDER, normalizeIconKey, ICON_MAP,
  *    decimalToFraction, FRACTION_TABLE, resolveDoorTypeLabel, solutionHasSingleDoor,
- *    solutionHasDoubleDoor, solutionHasAnyDoor, ensureDoorBoreDefault, resolveHardwareHex.
+ *    solutionHasDoubleDoor, solutionHasAnyDoor, ensureOperatingDoorDefault, resolveHardwareHex.
  *    calc-modal.js also writes closeModal onto this namespace.
  *  NOTE: Modal behavior (muntin toggle, door bore toggle, hardware color selector,
  *  modal open/close, modal data grid) is now handled by calc-modal.js.
@@ -129,7 +129,7 @@
  *
  *  Data Produced:
  *  - Normalized solution objects stored in window.comboSolutions:
- *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta, opening_width, opening_height, jamb_depth, location, door_bore }
+ *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta, opening_width, opening_height, jamb_depth, location, operating_door }
  *  - ICON_MAP (internal) created from #icon_registry: filename → Webflow asset URL.
  *
  * Load Order / Dependencies:
@@ -526,11 +526,11 @@
       // Location ("interior" | "exterior") — determines wood tile set
       location:       sol.location       ?? rootOpening.location,
 
-      // Door bore side ("left" | "right" | null)
-      door_bore: sol.door_bore ?? null,
+      // Operating door side ("left_hand" | "right_hand" | "none")
+      operating_door: sol.operating_door ?? "none",
 
-      // Hardware color name (e.g., "Chrome"); null until defaulted
-      hardware_color: sol.hardware_color ?? null,
+      // Hardware color name (e.g., "Chrome"); backend provides default
+      hardware_color: sol.hardware_color ?? "Chrome",
     }));
   }
 
@@ -545,21 +545,21 @@
     return false;
   }
 
-  /** Default door_bore for solutions with a single door, using the assembly template's door_bore value. */
-  function ensureDoorBoreDefault(solution) {
+  /** Default operating_door for solutions with a single door, using the assembly template's operating_door value. */
+  function ensureOperatingDoorDefault(solution) {
     if (!solution) return;
-    if (!solution.door_bore && solutionHasSingleDoor(solution)) {
-      var defaultSide = "right";
+    if (solution.operating_door === "none" && solutionHasSingleDoor(solution)) {
+      var defaultSide = "right_hand";
       var tplName = solution.assembly_template;
       if (tplName && window.ASSEMBLY_TEMPLATES) {
         for (var i = 0; i < window.ASSEMBLY_TEMPLATES.length; i++) {
           if (window.ASSEMBLY_TEMPLATES[i].template === tplName) {
-            defaultSide = window.ASSEMBLY_TEMPLATES[i].door_bore || "right";
+            defaultSide = window.ASSEMBLY_TEMPLATES[i].operating_door || "right_hand";
             break;
           }
         }
       }
-      solution.door_bore = defaultSide;
+      solution.operating_door = defaultSide;
     }
   }
 
@@ -582,15 +582,15 @@
   /** Resolve the door type label to replace the "XX" marker in line_notes.
    *  @param {object} solution
    *  @param {"listing"|"modal"} context - "listing" for solution cards, "modal" for Explore
-   *  @param {string} [boreSide] - override bore side (used by toggle); falls back to solution.door_bore
+   *  @param {string} [boreSide] - override bore side (used by toggle); falls back to solution.operating_door
    */
   function resolveDoorTypeLabel(solution, context, boreSide) {
     if (solutionHasDoubleDoor(solution)) return "Height";
     if (!solutionHasSingleDoor(solution)) return "XX";
     if (context === "listing") return "Single-Hung";
     // modal context: label reflects bore side
-    var side = boreSide || solution.door_bore || "right";
-    return (side === "left") ? "Left-Hand" : "Right-Hand";
+    var side = boreSide || solution.operating_door || "right_hand";
+    return (side === "left_hand") ? "Left-Hand" : "Right-Hand";
   }
 
   /** Look up hardware hex color from HARDWARE_COLORS by name. Defaults to Chrome. */
@@ -948,7 +948,7 @@
     solutionHasSingleDoor:        solutionHasSingleDoor,
     solutionHasDoubleDoor:        solutionHasDoubleDoor,
     solutionHasAnyDoor:           solutionHasAnyDoor,
-    ensureDoorBoreDefault:        ensureDoorBoreDefault,
+    ensureOperatingDoorDefault:    ensureOperatingDoorDefault,
     resolveHardwareHex:           resolveHardwareHex,
   };
 

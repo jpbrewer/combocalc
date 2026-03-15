@@ -118,8 +118,8 @@ Assets / Data:
 |---|---|---|---|---|---|---|
 | `calc-bootstrap-loader.js` | ORCHESTRATOR | On load (immediate IIFE) | None directly | DOM: `document.head` | DOM: injects `<script>` tags | Defines `FILE_ORDER` dependency graph; must be the single entry point embed |
 | `calc-query.js` | UI GLUE | On `DOMContentLoaded` | None (runs on load) | DOM: many required IDs (inputs + wrapper DIVs + blockers); Webflow redirected spans (via closest label queries) | DOM: show/hide blockers and wrapper DIVs; programmatic check/uncheck + dispatch events | Must run after Webflow has rendered form DOM; uses double `requestAnimationFrame` |
-| `calc-combo-results.js` | ORCHESTRATOR | On `DOMContentLoaded` | Globals: `window.job_id`, `window.comboSolutions`, `window._comboCalc` (shared utilities namespace) | DOM: form + solutions list templates + icon registry; Data: endpoints | DOM: clones solution cards/rows; shows/hides areas, panels; Data: fills `window.comboSolutions`; exposes `_comboCalc` with setField, stripWebflowInteractionIds, POS_ORDER, normalizeIconKey, ICON_MAP, decimalToFraction, resolveDoorTypeLabel, solutionHasSingleDoor, solutionHasDoubleDoor, solutionHasAnyDoor, ensureDoorBoreDefault, resolveHardwareHex | Uses network POST + polling; modal logic extracted to `calc-modal.js` |
-| `calc-modal.js` | UI CONTROLLER | On `DOMContentLoaded` | `window._comboCalc.closeModal` | DOM: modal overlay/panel/close + door bore chooser + hardware color selector + muntin toggle + modal data grid; Data: reads `window._comboCalc` utilities, `window.comboSolutions`, `window.build_assembly_svg` | DOM: opens/closes modal, populates modal data grid, toggles muntins/bore/hardware color; Data: updates `solution.door_bore`, `solution.hardware_color` | Requires `calc-combo-results.js` (for `window._comboCalc`); `build_assembly_svg` must exist before Explore |
+| `calc-combo-results.js` | ORCHESTRATOR | On `DOMContentLoaded` | Globals: `window.job_id`, `window.comboSolutions`, `window._comboCalc` (shared utilities namespace) | DOM: form + solutions list templates + icon registry; Data: endpoints | DOM: clones solution cards/rows; shows/hides areas, panels; Data: fills `window.comboSolutions`; exposes `_comboCalc` with setField, stripWebflowInteractionIds, POS_ORDER, normalizeIconKey, ICON_MAP, decimalToFraction, resolveDoorTypeLabel, solutionHasSingleDoor, solutionHasDoubleDoor, solutionHasAnyDoor, ensureOperatingDoorDefault, resolveHardwareHex | Uses network POST + polling; modal logic extracted to `calc-modal.js` |
+| `calc-modal.js` | UI CONTROLLER | On `DOMContentLoaded` | `window._comboCalc.closeModal` | DOM: modal overlay/panel/close + door bore chooser + hardware color selector + muntin toggle + modal data grid; Data: reads `window._comboCalc` utilities, `window.comboSolutions`, `window.build_assembly_svg` | DOM: opens/closes modal, populates modal data grid, toggles muntins/bore/hardware color; Data: updates `solution.operating_door`, `solution.hardware_color` | Requires `calc-combo-results.js` (for `window._comboCalc`); `build_assembly_svg` must exist before Explore |
 | `combo-assembly-templates-json.js` | ASSET/DATA | On load | `window.ASSEMBLY_TEMPLATES` | None | Global data array | Must load before `calc-svg-block-assembler.js` and before any `build_assembly_svg` call |
 | `window-type-a-svg-raw.js` | ASSET/DATA | On load | `window.WINDOW_TYPE_A_SVG_TEXT` | None | Global string | Must load before `calc-svg-block-builder.js` (renderer) |
 | `calc-svg-block-builder.js` | RENDERER | On-demand (when called) | `window.build_block_svgs(index)` | DOM: pattern `<img>` IDs (interior + exterior); Data: `window.WINDOW_TYPE_A_SVG_TEXT`, `window.comboSolutions[index].build_objects`, `solution.location` | Data: creates `solution.building_block_svgs[pos] = svgString`; renders stops for window constructions; swaps to exterior wood tiles when location is "exterior" | Requires template + comboSolutions + pattern images; fail-fast on missing prerequisites |
@@ -147,7 +147,7 @@ Assets / Data:
     - `jamb_depth` (number or null; from response root or per-solution)
     - `unit_width` (number or null; decimal inches; from response root or per-solution)
     - `unit_height` (number or null; decimal inches; from response root or per-solution)
-    - `door_bore` ("left" | "right" | null; which stile gets the bore hole; defaults per assembly template's `door_bore` value)
+    - `operating_door` ("left_hand" | "right_hand" | "none"; which stile gets the bore hole; defaults per assembly template's `operating_door` value)
     - `hardware_color` (string | null; hardware color name from `HARDWARE_COLORS`, e.g., "Chrome"; defaults to "Chrome" for doors)
   - Rendering cache keys (added lazily by SVG pipeline):
     - `building_block_svgs` (object; block SVGs with actual rows/cols — muntins on)
@@ -160,7 +160,7 @@ Assets / Data:
   - `calc-combo-results.js` for solutions list rendering and Explore button indexing.
   - `calc-modal.js` for modal data grid population, door bore/hardware color toggles.
   - `calc-svg-block-builder.js` reads `comboSolutions[index].build_objects` and `location`; writes `comboSolutions[index].building_block_svgs`.
-  - `calc-svg-block-assembler.js` reads `comboSolutions[index].assembly_template`, `building_block_svgs`, `unit_width`, `unit_height`, `door_bore`, and `hardware_color`; writes `assembly_svg`. Exposes `window.updateBoreVisibility(side, container)`, `window.updateHingeVisibility(construction, boreSide, container)`, and `window.updateHingeColor(hexColor, container)` for post-mount hardware toggling (all container params optional, default to `#explore`).
+  - `calc-svg-block-assembler.js` reads `comboSolutions[index].assembly_template`, `building_block_svgs`, `unit_width`, `unit_height`, `operating_door`, and `hardware_color`; writes `assembly_svg`. Exposes `window.updateBoreVisibility(side, container)`, `window.updateHingeVisibility(construction, boreSide, container)`, and `window.updateHingeColor(hexColor, container)` for post-mount hardware toggling (all container params optional, default to `#explore`).
 
 ### `window.job_id`
 - **Name in code:** `window.job_id`
@@ -181,7 +181,7 @@ Assets / Data:
   - `solutionHasSingleDoor(solution)` — predicate for single-door solutions
   - `solutionHasDoubleDoor(solution)` — predicate for double-door solutions
   - `solutionHasAnyDoor(solution)` — predicate for any-door solutions
-  - `ensureDoorBoreDefault(solution)` — ensures door_bore has a default value
+  - `ensureOperatingDoorDefault(solution)` — ensures operating_door has a default value
   - `resolveHardwareHex(colorName)` — resolves hardware color name to hex value
   - `closeModal()` — written by `calc-modal.js` so `resetUI()` in `calc-combo-results.js` can close the modal
 - **Source of truth:** Populated by `calc-combo-results.js`; `closeModal` added by `calc-modal.js`.
@@ -196,7 +196,7 @@ Assets / Data:
       - `row`, `building_block`, `order_dims`, `quantity`, `line_notes`
   - `line_notes` contains an "XX" marker that is replaced client-side:
     - Listing cards: always replaced with "Height"
-    - Modal: "Left-Hand" / "Right-Hand" (single_door, based on door_bore) or "Height" (double_door or no door)
+    - Modal: "Left-Hand" / "Right-Hand" (single_door, based on operating_door) or "Height" (double_door or no door)
     - Bore toggle swaps "Left-Hand" ↔ "Right-Hand" in the modal
 - **Source of truth:** Retrieval payload.
 
@@ -219,7 +219,7 @@ Assets / Data:
 
 ### `window.ASSEMBLY_TEMPLATES` (asset data)
 - **Name in code:** `window.ASSEMBLY_TEMPLATES`
-- **Shape (known):** Array of templates, each having `template`, `description`, `door_bore`, `positions`, `ops`.
+- **Shape (known):** Array of templates, each having `template`, `description`, `operating_door`, `positions`, `ops`.
   - Ops vocabulary used by assembler:
     - `place`, `snap`, `validateSnap`
     - snap corners limited to `TL`, `TR`, `BL`, `BR`
@@ -352,11 +352,11 @@ When `solution.location === "exterior"`, the ext_ wood tile URLs replace their i
    - A global document click handler (capture) detects clicks on `[data-solution-explore="btn"]`.
    - It opens the modal (`#modal-overlay` display = `flex`) and reads `dataset.solutionIndex`.
    - If `window.build_assembly_svg` is missing, it warns and stops.
-   - Configures the door bore chooser: shows `#choose-door-bore` if solution has a single door (defaults `door_bore` per assembly template), hides it otherwise. Sets the bore toggle active class.
+   - Configures the door bore chooser: shows `#choose-door-bore` if solution has a single door (defaults `operating_door` per assembly template), hides it otherwise. Sets the bore toggle active class.
    - Configures the hardware color selector: shows `#hardware-color-wrapper` if solution has any door (single or double), sets the `<select>` to the solution's `hardware_color`. Hides it otherwise.
    - Configures the double-door wrapper visibility.
    - If present, it calls `window.build_assembly_svg(index)` and logs errors if thrown.
-   - After SVG mount, calls `window.updateBoreVisibility(solution.door_bore)` and `window.updateHingeVisibility(doorType, boreSide)` to set bore/hinge visibility.
+   - After SVG mount, calls `window.updateBoreVisibility(solution.operating_door)` and `window.updateHingeVisibility(doorType, boreSide)` to set bore/hinge visibility.
    - After SVG rendering, calls `populateModalGrid(index)` to populate the modal data grid:
      - Sets opening summary fields (opening_width, opening_height, jamb_depth) from the solution object.
      - Sets icon via `[data-modal-icon="img"]` using the same icon registry resolution (via `_comboCalc` utilities).

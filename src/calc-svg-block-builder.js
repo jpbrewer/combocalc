@@ -90,7 +90,8 @@
  *  - `window.build_block_svgs(index, muntins)`:
  *    - index (number): position in window.comboSolutions.
  *    - muntins (boolean, optional): when false, forces rows=1/cols=1 (no muntins).
- *      Defaults to true (use actual rows/cols) if omitted or undefined.
+ *      When true (default), reads suggested_rows/suggested_cols from each build object,
+ *      falling back to rows/cols if the suggested fields are absent.
  *    - Reads `window.comboSolutions[index].build_objects`.
  *    - Produces/returns block SVGs in a cache slot on the solution object.
  *  - `waitForPatternImages()` (defined in-file; not attached to window explicitly) (inferred: callable within the embed scope).
@@ -101,7 +102,7 @@
  *
  *  Data Produced:
  *  - Cache keys on the solution object (dual-cache for muntin toggle):
- *    - `building_block_svgs` (muntins=true): block SVGs with actual rows/cols from build_objects.
+ *    - `building_block_svgs` (muntins=true): block SVGs with suggested_rows/suggested_cols (or rows/cols fallback).
  *    - `building_block_svgs_no_muntins` (muntins=false): block SVGs with rows=1, cols=1.
  *  - Each cache is populated as: cache[block_pos] = "<svg ...>...</svg>" (serialized SVG string)
  *
@@ -1078,8 +1079,8 @@ window.build_block_svgs = function build_block_svgs(index, muntins) {
     patternUrls.bevelSide = patternUrls.extBevelSide;
   }
 
-  // Resolve hardware color for hinge rendering
-  var hwHex = "#D7D7D7"; // default Chrome
+  // Resolve hardware color for hinge rendering (backend provides default in solution.hardware_color)
+  var hwHex = "#D7D7D7"; // fallback if HARDWARE_COLORS lookup fails
   var hwName = solution.hardware_color;
   if (hwName && window.HARDWARE_COLORS && Array.isArray(window.HARDWARE_COLORS)) {
     for (var hi = 0; hi < window.HARDWARE_COLORS.length; hi++) {
@@ -1107,7 +1108,11 @@ window.build_block_svgs = function build_block_svgs(index, muntins) {
     }
 
     var renderBlock = block;
-    if (!useMuntins) {
+    if (useMuntins) {
+      var sRows = block.suggested_rows || block.rows;
+      var sCols = block.suggested_cols || block.cols;
+      renderBlock = Object.assign({}, block, { rows: sRows, cols: sCols });
+    } else {
       renderBlock = Object.assign({}, block, { rows: 1, cols: 1 });
     }
     const svgString = renderOneBlockToSvgString(renderBlock, patternUrls, hwHex);
