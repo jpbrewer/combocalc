@@ -87,22 +87,26 @@ Script delivery is designed for CDN hosting (jsDelivr GitHub-backed) and uses a 
                 │ Explore click (data-solution-index)
                 v
 ┌────────────────────────────────────────────────────────────────────┐
-│ SVG Generation Pipeline                                            │
+│ SVG Generation Pipeline (Alpha + Beta modes)                         │
 │  window.build_assembly_svg(index, muntins) (global function)         │
-│   ├─ muntins param: false=no muntins (rows/cols=1), true=actual      │
-│   │  (default true if omitted; Explore click passes false)           │
+│   ├─ Auto-detects mode: Beta if window.comboSolution exists,         │
+│   │  Alpha if window.comboSolutions exists                           │
+│   ├─ Alpha: muntins param controls rows/cols; dual cache             │
+│   ├─ Beta:  rows/cols pre-resolved; no muntins; no caching           │
 │   ├─ optional mountTarget param (defaults to #explore)               │
-│   ├─ checks assembly SVG cache first (instant swap on toggle)        │
+│   ├─ checks assembly SVG cache first (Alpha only)                    │
 │   ├─ calls window.build_block_svgs(index, muntins)                   │
 │   │    calc-svg-block-builder.js (RENDERER)                          │
 │   │     - uses window.WINDOW_TYPE_A_SVG_TEXT                         │
 │   │     - uses pattern <img> URLs (#img_* ids)                       │
-│   │     - dual cache: building_block_svgs / building_block_svgs_no_muntins │
+│   │     - Alpha: dual cache: building_block_svgs / _no_muntins       │
+│   │     - Beta:  writes building_block_svgs only (no cache)          │
 │   └─ assembles blocks via template ops                               │
 │        calc-svg-block-assembler.js (ORCHESTRATOR)                    │
 │         - uses window.ASSEMBLY_TEMPLATES                             │
 │         - mounts final inline <svg> into mountTarget (default #explore) │
-│         - dual cache: assembly_svg / assembly_svg_no_muntins         │
+│         - Alpha: dual cache: assembly_svg / assembly_svg_no_muntins  │
+│         - Beta:  writes assembly_svg only (no cache)                 │
 └────────────────────────────────────────────────────────────────────┘
 
 Assets / Data:
@@ -122,8 +126,8 @@ Assets / Data:
 | `calc-modal.js` | UI CONTROLLER | On `DOMContentLoaded` | `window._comboCalc.closeModal` | DOM: modal overlay/panel/close + door bore chooser + hardware color selector + muntin toggle + modal data grid; Data: reads `window._comboCalc` utilities, `window.comboSolutions`, `window.build_assembly_svg` | DOM: opens/closes modal, populates modal data grid, toggles muntins/bore/hardware color, Configure button (stages/reconciles/POSTs solution to Xano); Data: updates `solution.operating_door`, `solution.hardware_color` | Requires `calc-combo-results.js` (for `window._comboCalc`); `build_assembly_svg` must exist before Explore |
 | `combo-assembly-templates-json.js` | ASSET/DATA | On load | `window.ASSEMBLY_TEMPLATES` | None | Global data array | Must load before `calc-svg-block-assembler.js` and before any `build_assembly_svg` call |
 | `window-type-a-svg-raw.js` | ASSET/DATA | On load | `window.WINDOW_TYPE_A_SVG_TEXT` | None | Global string | Must load before `calc-svg-block-builder.js` (renderer) |
-| `calc-svg-block-builder.js` | RENDERER | On-demand (when called) | `window.build_block_svgs(index)` | DOM: pattern `<img>` IDs (interior + exterior); Data: `window.WINDOW_TYPE_A_SVG_TEXT`, `window.comboSolutions[index].build_objects`, `solution.location` | Data: creates `solution.building_block_svgs[pos] = svgString`; renders stops for window constructions; swaps to exterior wood tiles when location is "exterior" | Requires template + comboSolutions + pattern images; fail-fast on missing prerequisites |
-| `calc-svg-block-assembler.js` | ORCHESTRATOR | On-demand (when called) | `build_assembly_svg(index, muntins, mountTarget)` (global function); `updateBoreVisibility(side, container)`, `updateHingeVisibility(construction, boreSide, container)`, `updateHingeColor(hexColor, container)` | DOM: mount target (default `div#explore`); Data: `window.ASSEMBLY_TEMPLATES`, `window.comboSolutions`, `window.build_block_svgs` | DOM: mounts inline `<svg>` into mount target (with optional dimension annotations when `unit_width`/`unit_height` present); Data: writes `solution.assembly_svg` + returns assembled artifact bundle | Requires templates + renderer + solution store; fail-fast (throws) on issues; optional `mountTarget`/`container` params default to `#explore` for backward compatibility; tracks `_lastMountContainer` for fallback |
+| `calc-svg-block-builder.js` | RENDERER | On-demand (when called) | `window.build_block_svgs(index, muntins)` | DOM: pattern `<img>` IDs (interior + exterior); Data: `window.WINDOW_TYPE_A_SVG_TEXT`, Alpha: `window.comboSolutions[index].build_objects`, Beta: `window.comboSolution.build_objects`; `solution.location` | Data: creates `solution.building_block_svgs[pos] = svgString`; renders stops for window constructions; swaps to exterior wood tiles when location is "exterior". Alpha: dual-cache (muntins on/off). Beta: no caching, rows/cols used directly. | Requires template + solution data + pattern images; fail-fast on missing prerequisites; auto-detects Alpha/Beta via `window.comboSolution` |
+| `calc-svg-block-assembler.js` | ORCHESTRATOR | On-demand (when called) | `build_assembly_svg(index, muntins, mountTarget)` (global function); `updateBoreVisibility(side, container)`, `updateHingeVisibility(construction, boreSide, container)`, `updateHingeColor(hexColor, container)` | DOM: mount target (default `div#explore`); Data: `window.ASSEMBLY_TEMPLATES`, Alpha: `window.comboSolutions`, Beta: `window.comboSolution`; `window.build_block_svgs` | DOM: mounts inline `<svg>` into mount target (with optional dimension annotations when `unit_width`/`unit_height` present); Data: writes `solution.assembly_svg` + returns assembled artifact bundle. Alpha: dual-cache. Beta: no caching. | Requires templates + renderer + solution data; fail-fast (throws) on issues; auto-detects Alpha/Beta via `window.comboSolution`; optional `mountTarget`/`container` params default to `#explore`; tracks `_lastMountContainer` for fallback |
 
 ---
 
@@ -161,6 +165,19 @@ Assets / Data:
   - `calc-modal.js` for modal data grid population, door bore/hardware color toggles.
   - `calc-svg-block-builder.js` reads `comboSolutions[index].build_objects` and `location`; writes `comboSolutions[index].building_block_svgs`.
   - `calc-svg-block-assembler.js` reads `comboSolutions[index].assembly_template`, `building_block_svgs`, `unit_width`, `unit_height`, `operating_door`, and `hardware_color`; writes `assembly_svg`. Exposes `window.updateBoreVisibility(side, container)`, `window.updateHingeVisibility(construction, boreSide, container)`, and `window.updateHingeColor(hexColor, container)` for post-mount hardware toggling (all container params optional, default to `#explore`).
+
+### `window.comboSolution` (Beta mode — singular)
+- **Name in code:** `window.comboSolution`
+- **Shape:** Single solution object (same shape as one `comboSolutions` element), with key differences:
+  - `rows` and `cols` on every build object are pre-resolved to final values.
+  - `suggested_rows` and `suggested_cols` are not present.
+  - No `muntins` flag on the solution object.
+- **Source of truth:** Set by the external Beta (Next.js configurator) page before calling `build_assembly_svg`.
+- **Mode detection:** When present, the SVG pipeline activates Beta mode (checked before `window.comboSolutions`).
+- **Consumed by:**
+  - `calc-svg-block-builder.js` reads `comboSolution.build_objects` and `location`; writes `comboSolution.building_block_svgs`.
+  - `calc-svg-block-assembler.js` reads `comboSolution.assembly_template`, `building_block_svgs`, `unit_width`, `unit_height`; writes `comboSolution.assembly_svg`.
+- **Not populated by any file in this repo** — it is set externally by the Beta consumer.
 
 ### `window.job_id`
 - **Name in code:** `window.job_id`
@@ -509,11 +526,16 @@ When `solution.location === "exterior"`, the ext_ wood tile URLs replace their i
   - Depends on `window._comboCalc` being populated before it boots (enforced by load order).
   - Writes `closeModal` onto `_comboCalc` for cross-module access by `resetUI()`.
 - `calc-svg-block-builder.js`:
-  - Rendering is driven only by `comboSolutions[index].build_objects`.
+  - Auto-detects Beta mode (`window.comboSolution`) vs Alpha mode (`window.comboSolutions`). Beta takes priority when both exist.
+  - Alpha: rendering driven by `comboSolutions[index].build_objects` with dual-cache and muntin toggle.
+  - Beta: rendering driven by `comboSolution.build_objects` with pre-resolved rows/cols, no caching.
   - Template SVG IDs in `window.WINDOW_TYPE_A_SVG_TEXT` are treated as a stable API.
   - Pattern images are referenced via resolved URLs from DOM `<img>` elements.
   - `head_detail` construction bypasses the template renderer; produces a white-filled rectangle with #333 non-scaling 2px border (no cols/rows/stiles/rails).
 - `calc-svg-block-assembler.js`:
+  - Auto-detects Beta mode (`window.comboSolution`) vs Alpha mode (`window.comboSolutions`). Beta takes priority.
+  - Alpha: dual-cache for muntin toggle; writes `solution.muntins` on every call.
+  - Beta: no caching; writes `assembly_svg` only; does not write `muntins`.
   - Template selection uses only `solution.assembly_template`.
   - Layout uses only template op sequence + block viewBox dimensions.
   - Output mounts translated `<g data-pos="...">` groups (no nested `<svg>` tags).
@@ -552,7 +574,13 @@ When `solution.location === "exterior"`, the ext_ wood tile URLs replace their i
 
 ## Change Log (Architecture)
 
-- **v1 (current)**
+- **v2 (current)**
+  - Added Beta mode to SVG pipeline (`calc-svg-block-builder.js`, `calc-svg-block-assembler.js`).
+  - Beta mode reads from `window.comboSolution` (singular) instead of `window.comboSolutions` (array).
+  - Beta mode: rows/cols pre-resolved, no muntin toggle, no caching, one-shot render.
+  - Alpha mode behavior unchanged.
+
+- **v1**
   - Extracted modal control logic from `calc-combo-results.js` into new `calc-modal.js` (UI CONTROLLER).
   - Introduced `window._comboCalc` shared utilities namespace for cross-module communication.
   - Parameterized `build_assembly_svg` mount target and `updateBore/Hinge` container for reuse flexibility.

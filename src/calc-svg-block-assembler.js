@@ -7,6 +7,9 @@
  *
  * Purpose:
  * - Orchestrates generation of per-position “building block” SVGs and assembles them into a single combined SVG.
+ * - Supports two modes, detected automatically at the top of `build_assembly_svg`:
+ *   - Alpha mode: reads from `window.comboSolutions[index]` (array). Muntin toggle, dual-cache.
+ *   - Beta mode:  reads from `window.comboSolution` (singular object). No muntins, no caching, one-shot render.
  * - Uses a named assembly template (assembly_template) and a template “ops” sequence (place/snap/validateSnap) to compute layout.
  * - Inserts the assembled SVG as an inline DOM <svg> into a configurable mount target (defaults to div#explore),
  *   and stores the serialized SVG on the solution object.
@@ -20,16 +23,18 @@
  *
  * Source of truth:
  * - Authoritative:
- *   - window.comboSolutions[index] (solution object), especially:
- *     - solution.assembly_template (template selection)
- *     - solution.building_block_svgs (block SVG inputs produced by build_block_svgs(index))
+ *   - Alpha: window.comboSolutions[index] (solution object from array).
+ *   - Beta:  window.comboSolution (singular solution object; rows/cols pre-resolved).
+ *   - solution.assembly_template (template selection)
+ *   - solution.building_block_svgs (block SVG inputs produced by build_block_svgs)
  *   - window.ASSEMBLY_TEMPLATES (template definitions: positions + ordered ops)
  *   - Each block SVG root <svg> viewBox (width/height) used for snap math.
  *
  * - Derived / computed:
  *   - placements computed from template ops (x/y per pos + w/h from viewBox).
  *   - Final assembled SVG root viewBox derived from placement bounds.
- *   - solution.assembly_svg derived by serializing the assembled DOM SVG element.
+ *   - Alpha: solution.assembly_svg or solution.assembly_svg_no_muntins derived by serializing.
+ *   - Beta:  solution.assembly_svg derived by serializing (no _no_muntins variant).
  *
  * -------------------------------------------------------------------------
  *
@@ -57,14 +62,15 @@
  *       { op:"snap", pos:"pos5", my:"BL", toPos:"pos2", their:"TL", offset?:{ x:0, y:0 } }
  *       { op:"validateSnap", pos:"pos5", my:"BR", toPos:"pos2", their:"TR", tolerance?:number }
  *
- *   - window.comboSolutions: Array of solution objects (index-addressable).
- *   - window.build_block_svgs(index): Function that populates comboSolutions[index].building_block_svgs.
+ *   - Alpha: window.comboSolutions: Array of solution objects (index-addressable).
+ *   - Beta:  window.comboSolution: Single solution object (index ignored).
+ *   - window.build_block_svgs(index, muntins): Function that populates building_block_svgs on the solution.
  *
  * - Required solution fields:
- *   - comboSolutions[index].assembly_template:
+ *   - solution.assembly_template:
  *       string matching a template .template in ASSEMBLY_TEMPLATES.
  *
- *   - comboSolutions[index].building_block_svgs:
+ *   - solution.building_block_svgs:
  *       Either:
  *         { pos2: "<svg...>", pos5: "<svg...>", ... }
  *       Or:
@@ -93,8 +99,9 @@
  *     DOMParser
  *     XMLSerializer
  *
- * - window.ASSEMBLY_TEMPLATES, window.comboSolutions, and window.build_block_svgs
- *   are defined before invocation.
+ * - window.ASSEMBLY_TEMPLATES and window.build_block_svgs are defined before invocation.
+ * - Alpha: window.comboSolutions is defined before invocation.
+ * - Beta:  window.comboSolution is defined before invocation.
  *
  * - No reliance on Webflow form redirected controls (w-radio-input, w--redirected-checked, etc.).
  *
@@ -124,13 +131,15 @@
  *       - Called automatically after every mount and by hardware color selector change handler.
  *
  *     build_assembly_svg params:
- *       - index (number): position in window.comboSolutions.
- *       - muntins (boolean, optional): when false, renders with rows=1/cols=1 (no muntins).
- *         Defaults to true (use actual rows/cols) if omitted or undefined.
+ *       - index (number): Alpha: position in window.comboSolutions. Beta: ignored.
+ *       - muntins (boolean, optional): Alpha: when false, renders with rows=1/cols=1 (no muntins);
+ *         defaults to true (use actual rows/cols) if omitted or undefined.
+ *         Beta: ignored (rows/cols pre-resolved; always uses building_block_svgs cache key).
  *       - mountTarget (optional): string ID or HTMLElement to mount into; defaults to #explore.
  *       - Passes muntins through to build_block_svgs(index, muntins).
- *       - If a cached assembly SVG exists for the requested muntin state, mounts it
+ *       - Alpha: if a cached assembly SVG exists for the requested muntin state, mounts it
  *         directly from cache (skips full render pipeline).
+ *       - Beta: no caching; always renders fresh.
  *
  * DOM Mutations:
  * - Replaces the contents of the mount target (default div#explore):
@@ -145,11 +154,14 @@
  *     explore.style.overflow = "hidden"
  *
  * Data Produced:
- * - Writes to the solution object (dual-cache for muntin toggle):
+ * - Alpha writes to the solution object (dual-cache for muntin toggle):
  *     comboSolutions[index].assembly_svg           (muntins=true: actual rows/cols)
  *     comboSolutions[index].assembly_svg_no_muntins (muntins=false: rows=1, cols=1)
  *     comboSolutions[index].muntins                (boolean: customer's last toggle choice;
  *       written on every call, before cache check, so it always reflects the latest selection)
+ * - Beta writes:
+ *     comboSolution.assembly_svg                   (always; no _no_muntins variant)
+ *     comboSolution.building_block_svgs            (always; populated by build_block_svgs)
  *
  * - Return value:
  *     { svgElement, svgString, placements, template }
@@ -199,7 +211,7 @@
  * -------------------------------------------------------------------------
  *
  * Rule Summary / Invariants:
- * - Template selection is driven ONLY by comboSolutions[index].assembly_template.
+ * - Template selection is driven ONLY by solution.assembly_template.
  * - Placement math relies ONLY on:
  *     template op order
  *     block viewBox width/height
@@ -220,8 +232,9 @@
  * Version Notes:
  * - v0 (inferred):
  *     - Browser-only orchestrator.
- *     - Calls build_block_svgs(index) then assembles via data-driven templates.
- *     - Uses comboSolutions[index] as canonical solution record.
+ *     - Calls build_block_svgs(index, muntins) then assembles via data-driven templates.
+ *     - Alpha: uses comboSolutions[index] as canonical solution record.
+ *     - Beta:  uses comboSolution (singular) as canonical solution record.
  *     - Writes assembly_svg back onto the solution object.
  *     - Renders result as inline DOM SVG inside #explore.
  */
@@ -333,13 +346,22 @@ function getDoorType(solution) {
 
 function build_assembly_svg(index, muntins, mountTarget) {
   try {
-    // 1) Validate globals / index
-    if (!window.comboSolutions || !Array.isArray(window.comboSolutions)) {
-      throw new Error("build_assembly_svg: window.comboSolutions must be an array");
+    // 1) Detect mode and validate globals / index
+    var isBeta = !!(window.comboSolution && typeof window.comboSolution === "object");
+    var solution;
+
+    if (isBeta) {
+      solution = window.comboSolution;
+    } else {
+      if (!window.comboSolutions || !Array.isArray(window.comboSolutions)) {
+        throw new Error("build_assembly_svg: window.comboSolutions must be an array");
+      }
+      if (typeof index !== "number" || index < 0 || index >= window.comboSolutions.length) {
+        throw new Error(`build_assembly_svg: index out of range: ${index}`);
+      }
+      solution = window.comboSolutions[index];
     }
-    if (typeof index !== "number" || index < 0 || index >= window.comboSolutions.length) {
-      throw new Error(`build_assembly_svg: index out of range: ${index}`);
-    }
+
     if (!window.ASSEMBLY_TEMPLATES || !Array.isArray(window.ASSEMBLY_TEMPLATES)) {
       throw new Error("build_assembly_svg: window.ASSEMBLY_TEMPLATES must be an array");
     }
@@ -350,15 +372,14 @@ function build_assembly_svg(index, muntins, mountTarget) {
     // Resolve mount target (string, element, or default to #explore)
     var resolvedMount = _resolveMountTarget(mountTarget);
 
-    var useMuntins = (muntins !== false);
-    var assemblyCacheKey = useMuntins ? "assembly_svg" : "assembly_svg_no_muntins";
-    var blockCacheKey = useMuntins ? "building_block_svgs" : "building_block_svgs_no_muntins";
+    var useMuntins = isBeta ? false : (muntins !== false);
+    var assemblyCacheKey = isBeta ? "assembly_svg" : (useMuntins ? "assembly_svg" : "assembly_svg_no_muntins");
+    var blockCacheKey = isBeta ? "building_block_svgs" : (useMuntins ? "building_block_svgs" : "building_block_svgs_no_muntins");
 
-    const solution = window.comboSolutions[index];
-    solution.muntins = useMuntins;
+    if (!isBeta) solution.muntins = useMuntins;
 
-    // 2a) If cached assembly SVG exists, mount it directly and return
-    if (solution[assemblyCacheKey]) {
+    // 2a) If cached assembly SVG exists, mount it directly and return (Alpha only)
+    if (!isBeta && solution[assemblyCacheKey]) {
       if (!resolvedMount) throw new Error("build_assembly_svg: could not find mount target");
       _lastMountContainer = resolvedMount;
       if (!resolvedMount.style.position) resolvedMount.style.position = "relative";

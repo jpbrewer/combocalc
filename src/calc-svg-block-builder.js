@@ -7,9 +7,12 @@
  *
  * Purpose:
  *  - Renders parametric, face-on 2D window/door/sidelite SVGs in-browser from a single template SVG string.
- *  - Reads a “solution” object from `window.comboSolutions[index]`, iterates its `build_objects`, and produces SVG strings.
+ *  - Supports two modes, detected automatically at the top of `build_block_svgs`:
+ *    - Alpha mode: reads from `window.comboSolutions[index]` (array of solutions). Supports muntin toggle and dual-cache.
+ *    - Beta mode:  reads from `window.comboSolution` (singular object). Rows/cols pre-resolved, no muntin logic, no caching.
+ *  - Iterates a solution's `build_objects` and produces SVG strings.
  *  - Injects external PNG-based SVG `<pattern>` defs (wood + glass) using Webflow CDN-resolved `<img>` URLs.
- *  - Writes results back onto the solution object as `building_block_svgs[block_pos] = "<svg...>"`.
+ *  - Writes results back onto the solution object as `building_block_svgs[block_pos] = “<svg...>”`.
  *
  * Context:
  *  - Built as a Webflow-friendly “drop-in” script (HTML Embed) because Webflow is browser-only and not a bundler/runtime.
@@ -18,11 +21,13 @@
  *
  * Source of truth:
  *  - Authoritative inputs:
- *    - `window.comboSolutions[index].build_objects` (array of “block request” objects) is the sole data source for geometry.
+ *    - Alpha: `window.comboSolutions[index].build_objects` (array of “block request” objects) is the data source for geometry.
+ *    - Beta:  `window.comboSolution.build_objects` (same shape, rows/cols pre-resolved, no suggested_rows/suggested_cols).
  *    - `window.WINDOW_TYPE_A_SVG_TEXT` (string) is the authoritative SVG template layout / IDs / grouping.
  *    - Pattern image URLs are sourced from DOM `<img>` elements via `img.currentSrc || img.src`.
  *  - Derived/synced state:
- *    - Output SVG strings are derived and stored into `window.comboSolutions[index].building_block_svgs`.
+ *    - Alpha: output SVG strings stored into `window.comboSolutions[index].building_block_svgs` or `building_block_svgs_no_muntins`.
+ *    - Beta:  output SVG strings stored into `window.comboSolution.building_block_svgs` (no `_no_muntins` variant).
  *    - Pattern `<defs>/<pattern>/<image>` nodes are derived and injected per rendered SVG (not persisted elsewhere).
  *
  * Inputs (reads):
@@ -46,8 +51,9 @@
  *  Data Contract:
  *  - Required globals:
  *    - `window.WINDOW_TYPE_A_SVG_TEXT` (string): the full SVG template text.
- *    - `window.comboSolutions` (array): solutions array.
- *    - `window.comboSolutions[index].build_objects` (array): block request objects.
+ *    - Alpha: `window.comboSolutions` (array): solutions array.
+ *    - Alpha: `window.comboSolutions[index].build_objects` (array): block request objects.
+ *    - Beta:  `window.comboSolution` (object): single solution with pre-resolved rows/cols.
  *    - `window.comboSolutions[index].location` (string, optional): "interior" or "exterior".
  *      When "exterior", wood tile patterns are swapped to exterior variants; glass unchanged.
  *  - Required per-block fields inside each `build_objects[]` entry (as used by this file):
@@ -88,12 +94,12 @@
  *
  *  Public API:
  *  - `window.build_block_svgs(index, muntins)`:
- *    - index (number): position in window.comboSolutions.
- *    - muntins (boolean, optional): when false, forces rows=1/cols=1 (no muntins).
- *      When true (default), reads suggested_rows/suggested_cols from each build object,
- *      falling back to rows/cols if the suggested fields are absent.
- *    - Reads `window.comboSolutions[index].build_objects`.
- *    - Produces/returns block SVGs in a cache slot on the solution object.
+ *    - index (number): Alpha: position in window.comboSolutions. Beta: ignored.
+ *    - muntins (boolean, optional): Alpha: when false, forces rows=1/cols=1 (no muntins);
+ *      when true (default), reads suggested_rows/suggested_cols falling back to rows/cols.
+ *      Beta: ignored (rows/cols used directly).
+ *    - Alpha: reads `window.comboSolutions[index].build_objects`, writes to dual-cache slots.
+ *    - Beta:  reads `window.comboSolution.build_objects`, writes to `building_block_svgs` (no caching).
  *  - `waitForPatternImages()` (defined in-file; not attached to window explicitly) (inferred: callable within the embed scope).
  *
  *  DOM Mutations:
@@ -101,15 +107,18 @@
  *  - All DOM manipulation is performed on an in-memory SVG document created by DOMParser per rendered SVG string.
  *
  *  Data Produced:
- *  - Cache keys on the solution object (dual-cache for muntin toggle):
+ *  - Alpha cache keys on the solution object (dual-cache for muntin toggle):
  *    - `building_block_svgs` (muntins=true): block SVGs with suggested_rows/suggested_cols (or rows/cols fallback).
  *    - `building_block_svgs_no_muntins` (muntins=false): block SVGs with rows=1, cols=1.
- *  - Each cache is populated as: cache[block_pos] = "<svg ...>...</svg>" (serialized SVG string)
+ *    - Each cache is populated as: cache[block_pos] = "<svg ...>...</svg>" (serialized SVG string)
+ *  - Beta output:
+ *    - `building_block_svgs`: block SVGs with pre-resolved rows/cols. Always freshly rendered (no caching).
  *
  * Load Order / Dependencies:
  *  - Must load AFTER:
  *    - `window.WINDOW_TYPE_A_SVG_TEXT` is assigned.
- *    - `window.comboSolutions` is available (or at least before calling `window.build_block_svgs`).
+ *    - Alpha: `window.comboSolutions` is available (or at least before calling `window.build_block_svgs`).
+ *    - Beta:  `window.comboSolution` is available before calling `window.build_block_svgs`.
  *    - The pattern preload <img> elements exist in the DOM and have resolved URLs.
  *  - Does NOT auto-run rendering on load; rendering occurs only when `window.build_block_svgs(index)` is called.
  *
@@ -1047,6 +1056,58 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
  * build_block_svgs(index)
  */
 window.build_block_svgs = function build_block_svgs(index, muntins) {
+  // --- Beta mode: single solution, no muntins, no caching ---
+  if (window.comboSolution && typeof window.comboSolution === "object") {
+    var betaSolution = window.comboSolution;
+    var betaObjects = mustBeArray(betaSolution.build_objects, "comboSolution.build_objects");
+    if (betaObjects.length === 0) throw new Error("comboSolution.build_objects is empty.");
+
+    var betaPatternUrls = getPatternUrlsFromDom();
+    if (betaSolution.location === "exterior") {
+      betaPatternUrls.rail = betaPatternUrls.extRail;
+      betaPatternUrls.stile = betaPatternUrls.extStile;
+      betaPatternUrls.bevelTop = betaPatternUrls.extBevelTop;
+      betaPatternUrls.bevelBottom = betaPatternUrls.extBevelBottom;
+      betaPatternUrls.bevelSide = betaPatternUrls.extBevelSide;
+    }
+
+    var betaHwHex = "#D7D7D7";
+    var betaHwName = betaSolution.hardware_color;
+    if (betaHwName && window.HARDWARE_COLORS && Array.isArray(window.HARDWARE_COLORS)) {
+      for (var bhi = 0; bhi < window.HARDWARE_COLORS.length; bhi++) {
+        if (window.HARDWARE_COLORS[bhi].name === betaHwName) { betaHwHex = window.HARDWARE_COLORS[bhi].color; break; }
+      }
+    }
+
+    betaSolution.building_block_svgs = {};
+
+    for (var bi = 0; bi < betaObjects.length; bi++) {
+      var betaBlock = betaObjects[bi];
+      if (!betaBlock || typeof betaBlock !== "object") continue;
+      var betaPos = mustStr(betaBlock.block_pos, "build_objects[].block_pos");
+
+      if (String(betaBlock.construction || "").trim() === "head_detail") {
+        var bhdW = Number(betaBlock.width) * PX_PER_INCH;
+        var bhdH = Number(betaBlock.height) * PX_PER_INCH;
+        var bhdSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + bhdW + ' ' + bhdH + '"'
+          + ' width="' + (bhdW * DISPLAY_SCALE) + '" height="' + (bhdH * DISPLAY_SCALE) + '">'
+          + '<rect x="0" y="0" width="' + bhdW + '" height="' + bhdH + '"'
+          + ' fill="white" stroke="#333333" stroke-width="2" vector-effect="non-scaling-stroke"/>'
+          + '</svg>';
+        betaSolution.building_block_svgs[betaPos] = bhdSvg;
+        continue;
+      }
+
+      // Beta: rows/cols are pre-resolved, use as-is (shallow copy to avoid mutation)
+      var betaRenderBlock = Object.assign({}, betaBlock);
+      var betaSvgStr = renderOneBlockToSvgString(betaRenderBlock, betaPatternUrls, betaHwHex);
+      betaSolution.building_block_svgs[betaPos] = betaSvgStr;
+    }
+
+    return betaSolution.building_block_svgs;
+  }
+  // --- End Beta mode ---
+
   if (!window.comboSolutions || !Array.isArray(window.comboSolutions)) {
     throw new Error("window.comboSolutions is missing or not an array.");
   }
