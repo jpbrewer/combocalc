@@ -124,10 +124,8 @@ Removing fixed height from `#explore` will break layout scaling.
 
 ### `#pattern_preload` Contract Requirements
 
--   Present in live DOM as `<div class="pattern-repo" id="pattern_preload">`.
--   Contains 6 pattern `<img>` elements (see Canonical DOM Inventory, pattern images section).
--   JS references child `<img>` elements by their individual IDs.
--   Not referenced by ID directly in JS; only child images are accessed by ID.
+-   No longer required by JS. Tile pattern images are now loaded via HTTP from `window.TILE_BASE_URL` (set by bootstrap loader).
+-   The `#pattern_preload` container and its child `<img>` elements may remain in Webflow for legacy reasons but are not referenced by JS.
 
 ------------------------------------------------------------------------
 
@@ -266,22 +264,9 @@ Removing fixed height from `#explore` will break layout scaling.
 | `[data-modal-notes="row"]`            | `div`        | Notes row; contains `[data-field="notes"]`                  | `calc-modal.js` | Notes silently not shown               |
 | `[data-modal-configure="btn"]`        | `a`/`button` | Configure button; click stages solution, reconciles muntins, POSTs to Xano | `calc-modal.js` | Button absent; configure flow unavailable |
 
-## Icon registry
+## Tile and Icon Assets (no DOM dependency)
 
-| ID              | Element Type | Purpose                                                          | Controlled By           | Failure Behavior if Missing                    |
-|-----------------|--------------|------------------------------------------------------------------|-------------------------|------------------------------------------------|
-| `icon_registry` | `div`        | Hidden container; holds `<img data-icon-name="...">` mappings   | `calc-combo-results.js` | Icons fall back to origin-relative URLs (may 404) |
-
-## Pattern preload images (children of `#pattern_preload`)
-
-| ID                    | Element Type | Purpose                            | Controlled By               | Failure Behavior if Missing        |
-|-----------------------|--------------|------------------------------------|-----------------------------|------------------------------------|
-| `img_rail_wood`       | `<img>`      | Rail wood pattern image asset      | `calc-svg-block-builder.js` | SVG block pattern fill broken      |
-| `img_stile_wood`      | `<img>`      | Stile wood pattern image asset     | `calc-svg-block-builder.js` | SVG block pattern fill broken      |
-| `img_bevel_top_wood`  | `<img>`      | Top bevel wood pattern image asset | `calc-svg-block-builder.js` | SVG block pattern fill broken      |
-| `img_bevel_bottom_wood`| `<img>`     | Bottom bevel wood pattern          | `calc-svg-block-builder.js` | SVG block pattern fill broken      |
-| `img_bevel_side_wood` | `<img>`      | Side bevel wood pattern            | `calc-svg-block-builder.js` | SVG block pattern fill broken      |
-| `img_glass`           | `<img>`      | Glass pattern image asset          | `calc-svg-block-builder.js` | SVG block pattern fill broken      |
+Tile pattern images and arrangement icons are loaded via HTTP from configurable base URLs set in the bootstrap loader (`window.TILE_BASE_URL`, `window.ICON_BASE_URL`). No DOM `<img>` elements or icon registry containers are required by JS. The `#icon_registry` container and `#pattern_preload` children may remain in Webflow markup but are no longer read by any script.
 
 ------------------------------------------------------------------------
 
@@ -433,13 +418,6 @@ These elements are populated by `setField()` inside cloned cards/rows:
 | `line_notes`          | Line notes value (may contain "XX" marker for door type label) |
 | `summary`             | Summary/notes string from `solution_grid.notes`       |
 
-## Icon registry lookup
-
--   `#icon_registry` must contain `<img data-icon-name="filename.png" src="...">` entries.
--   JS builds `ICON_MAP` (filename → Webflow asset URL) at `DOMContentLoaded`.
--   On Explore click, solution's `icon` path is normalized to filename and looked up in `ICON_MAP`.
--   If not found, falls back to `new URL(raw, window.location.origin)`.
-
 ## Webflow form panels
 
 | Selector       | Purpose                                                    |
@@ -502,7 +480,6 @@ Full list of `data-*` attributes used by JS as selectors or data carriers:
 | `data-solution-icon`        | `"img"`                   | `calc-combo-results.js`   | Wrapper element; must contain `<img data-field="icon">`         |
 | `data-solution-index`       | numeric string (0-based)  | `calc-combo-results.js`   | Written by JS; read on Explore click to index `window.comboSolutions` |
 | `data-field`                | see Rendering Targets §8  | `calc-combo-results.js`   | `icon`, `row`, `building_block`, `order_dims`, `quantity`, `line_notes`, `summary`; modal also uses `notes`, `opening_width`, `opening_height`, `jamb_depth` |
-| `data-icon-name`            | filename string (e.g. `arrangement_14_icon.png`) | `calc-combo-results.js` | On `<img>` inside `#icon_registry`; keyed into `ICON_MAP` |
 | `data-modal-summary`        | `"section"`               | `calc-modal.js`           | Opening summary block inside modal                          |
 | `data-modal-grid`           | `"section"`               | `calc-modal.js`           | Solution grid wrapper inside modal                          |
 | `data-modal-icon`           | `"img"`                   | `calc-modal.js`           | Icon wrapper; must contain `<img data-field="icon">`        |
@@ -601,7 +578,6 @@ High risk breakage areas:
 -   Removing modal grid template elements degrades gracefully (no crash) but modal data will not display
 -   Renaming any `data-field` value (`icon`, `row`, `building_block`, `order_dims`, `quantity`, `line_notes`, `summary`, `notes`, `opening_width`, `opening_height`, `jamb_depth`)
 -   Removing or renaming `.solutions-list` CSS class — breaks card list container lookup
--   Removing or renaming any of the 6 pattern image IDs (`img_rail_wood` etc.) — breaks SVG block pattern fills
 -   Webflow Interactions (`data-w-id`) being re-added to cloned cards — JS strips these; if Webflow re-attaches to originals after publish, clones may inherit them before strip runs
 -   Adding a form action attribute to `#wf_form_combo` — JS removes Webflow form attributes at init, but a native action could fire before JS intercepts on slow connections
 
@@ -624,9 +600,6 @@ If snap validation fails:
 
 If `build_assembly_svg` missing at Explore click:
 -   Modal opens; warning logged; no SVG rendered.
-
-If `#icon_registry` missing:
--   Icons fall back to origin-relative URL resolution (may 404 on Webflow-hosted pages).
 
 If poll times out (> 40 attempts × 2s = 80s):
 -   Error thrown; submit button restored; Webflow fail panel shown.

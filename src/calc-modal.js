@@ -37,7 +37,7 @@
  *    - [data-modal-configure="btn"]   (Configure button; click triggers stage/reconcile/POST)
  *
  * Data Contract:
- *  - Reads window._comboCalc (shared utilities from calc-combo-results.js)
+ *  - Reads window._comboCalc (shared utilities from calc-combo-results.js; includes resolveIconUrl)
  *  - Reads window.comboSolutions (solution data store)
  *  - Calls window.build_assembly_svg(index, muntins) (SVG pipeline)
  *  - Calls window.updateBoreVisibility(boreSide) (SVG post-mount)
@@ -119,8 +119,7 @@
   var setField                   = cc.setField;
   var stripWebflowInteractionIds = cc.stripWebflowInteractionIds;
   var POS_ORDER                  = cc.POS_ORDER;
-  var normalizeIconKey           = cc.normalizeIconKey;
-  var ICON_MAP                   = cc.ICON_MAP;
+  var resolveIconUrl             = cc.resolveIconUrl;
   var decimalToFraction          = cc.decimalToFraction;
   var resolveDoorTypeLabel       = cc.resolveDoorTypeLabel;
   var solutionHasSingleDoor      = cc.solutionHasSingleDoor;
@@ -534,29 +533,15 @@
     var img = wrapper.querySelector('[data-field="icon"]');
     if (!img) return;
 
-    if (!iconPath) {
+    var resolved = resolveIconUrl(iconPath);
+    if (!resolved) {
       img.removeAttribute("src");
       img.alt = "";
       return;
     }
 
-    var raw = String(iconPath).trim();
-    var looksAbsolute = /^https?:\/\//i.test(raw);
-
-    var resolved = raw;
-
-    if (!looksAbsolute) {
-      var filename = normalizeIconKey(raw);
-      if (ICON_MAP[filename]) {
-        resolved = ICON_MAP[filename];
-      } else {
-        resolved = new URL(raw, window.location.origin).href;
-        console.warn("Modal icon not found in registry; fallback:", resolved, "original:", raw);
-      }
-    }
-
     img.alt = "Arrangement icon";
-    img.onerror = function () { console.warn("Modal icon failed to load:", resolved, "original:", raw); };
+    img.onerror = function () { console.warn("Modal icon failed to load:", resolved); };
     img.src = resolved;
   }
 

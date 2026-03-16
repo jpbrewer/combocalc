@@ -11,7 +11,7 @@
  *    - Alpha mode: reads from `window.comboSolutions[index]` (array of solutions). Supports muntin toggle and dual-cache.
  *    - Beta mode:  reads from `window.comboSolution` (singular object). Rows/cols pre-resolved, no muntin logic, no caching.
  *  - Iterates a solution's `build_objects` and produces SVG strings.
- *  - Injects external PNG-based SVG `<pattern>` defs (wood + glass) using Webflow CDN-resolved `<img>` URLs.
+ *  - Injects external PNG-based SVG `<pattern>` defs (wood + glass) using URLs constructed from `window.TILE_BASE_URL`.
  *  - Writes results back onto the solution object as `building_block_svgs[block_pos] = “<svg...>”`.
  *
  * Context:
@@ -24,7 +24,7 @@
  *    - Alpha: `window.comboSolutions[index].build_objects` (array of “block request” objects) is the data source for geometry.
  *    - Beta:  `window.comboSolution.build_objects` (same shape, rows/cols pre-resolved, no suggested_rows/suggested_cols).
  *    - `window.WINDOW_TYPE_A_SVG_TEXT` (string) is the authoritative SVG template layout / IDs / grouping.
- *    - Pattern image URLs are sourced from DOM `<img>` elements via `img.currentSrc || img.src`.
+ *    - Pattern image URLs are constructed from `window.TILE_BASE_URL` + filename (set by bootstrap loader).
  *  - Derived/synced state:
  *    - Alpha: output SVG strings stored into `window.comboSolutions[index].building_block_svgs` or `building_block_svgs_no_muntins`.
  *    - Beta:  output SVG strings stored into `window.comboSolution.building_block_svgs` (no `_no_muntins` variant).
@@ -33,24 +33,12 @@
  * Inputs (reads):
  *
  *  DOM Contract:
- *  - Required DOM IDs (these are `<img>` element IDs; NOT inputs/wrappers/labels):
- *    - #img_rail_wood          (PNG for rails/jamb_top/jamb_bottom/muntin_horizontal)
- *    - #img_stile_wood         (PNG for stiles/jamb_left/jamb_right/muntin_vertical)
- *    - #img_bevel_top_wood     (PNG for bevel top)
- *    - #img_bevel_bottom_wood  (PNG for bevel bottom)
- *    - #img_bevel_side_wood    (PNG for bevel left/right)
- *    - #img_glass              (PNG for glass)
- *    - #img_ext_rail_wood      (PNG for exterior rails)
- *    - #img_ext_stile_wood     (PNG for exterior stiles)
- *    - #img_ext_bevel_top_wood (PNG for exterior bevel top)
- *    - #img_ext_bevel_bottom_wood (PNG for exterior bevel bottom)
- *    - #img_ext_bevel_side_wood   (PNG for exterior bevel left/right)
- *  - Structural assumptions:
- *    - These <img> elements exist in the DOM when rendering runs, and have resolvable URLs (currentSrc/src).
+ *  - No DOM elements required for tile/pattern images (URLs constructed from window.TILE_BASE_URL).
  *
  *  Data Contract:
  *  - Required globals:
  *    - `window.WINDOW_TYPE_A_SVG_TEXT` (string): the full SVG template text.
+ *    - `window.TILE_BASE_URL` (string): base URL for tile/pattern PNG assets (set by bootstrap loader).
  *    - Alpha: `window.comboSolutions` (array): solutions array.
  *    - Alpha: `window.comboSolutions[index].build_objects` (array): block request objects.
  *    - Beta:  `window.comboSolution` (object): single solution with pre-resolved rows/cols.
@@ -86,7 +74,7 @@
  *  - Runs in a modern browser with:
  *    - DOMParser / XMLSerializer support.
  *    - CSS.escape support.
- *  - Pattern images should be loaded before rendering; helper `waitForPatternImages()` is provided.
+ *  - Pattern image URLs are constructed at render time from `window.TILE_BASE_URL`; no DOM preload required.
  *  - No Webflow “redirected input” syncing is used in this file. (No references to `w--redirected-checked`, `w-radio-input`,
  *    `w-checkbox-input`, etc. appear in the code as currently written.)
  *
@@ -100,7 +88,6 @@
  *      Beta: ignored (rows/cols used directly).
  *    - Alpha: reads `window.comboSolutions[index].build_objects`, writes to dual-cache slots.
  *    - Beta:  reads `window.comboSolution.build_objects`, writes to `building_block_svgs` (no caching).
- *  - `waitForPatternImages()` (defined in-file; not attached to window explicitly) (inferred: callable within the embed scope).
  *
  *  DOM Mutations:
  *  - None on the page DOM (no page elements are modified).
@@ -119,19 +106,18 @@
  *    - `window.WINDOW_TYPE_A_SVG_TEXT` is assigned.
  *    - Alpha: `window.comboSolutions` is available (or at least before calling `window.build_block_svgs`).
  *    - Beta:  `window.comboSolution` is available before calling `window.build_block_svgs`.
- *    - The pattern preload <img> elements exist in the DOM and have resolved URLs.
+ *    - `window.TILE_BASE_URL` is set (by bootstrap loader).
  *  - Does NOT auto-run rendering on load; rendering occurs only when `window.build_block_svgs(index)` is called.
  *
  * Side Effects:
- *  - Network calls (fetch/polling): No (but pattern images may load via normal browser image loading outside this script).
+ *  - Network calls (fetch/polling): No (pattern image URLs are referenced in SVG; browser fetches them on render).
  *  - localStorage/cookies: No.
- *  - Timers / intervals / requestAnimationFrame: No (except Promise-based waiting via image load events in helper).
- *  - Event listeners added:
- *    - `waitForPatternImages()` adds one-time `load` and `error` listeners to the six pattern <img> elements when needed.
+ *  - Timers / intervals / requestAnimationFrame: No.
+ *  - Event listeners added: None.
  *
  * Failure Behavior:
- *  - Missing globals / missing DOM IDs / missing template IDs:
- *    - Throws Errors (hard-fail) with descriptive messages (e.g., “Template missing …”, “Missing <img id=…>”).
+ *  - Missing globals / missing template IDs:
+ *    - Throws Errors (hard-fail) with descriptive messages (e.g., “Template missing …”, “TILE_BASE_URL is not set”).
  *  - Invalid geometry:
  *    - Throws Errors for impossible constraints (e.g., SR sums exceed leaf dims; lite too small for bevel thickness).
  *  - Current behavior is “fail-fast” rather than “fail-soft”.
@@ -140,7 +126,7 @@
  * Rule Summary / Invariants:
  *  - Rendering is driven ONLY by `build_objects` for the selected solution index; output is written to `building_block_svgs`.
  *  - Template SVG IDs are treated as stable “API”; any ID/group rename in template must be reflected here.
- *  - Patterns are NOT embedded as base64; they are referenced as external URLs resolved from Webflow CDN `<img>` elements.
+ *  - Patterns are NOT embedded as base64; they are referenced as external URLs constructed from `window.TILE_BASE_URL`.
  *  - `construction` governs rotation / hiding:
  *    - door/sidelite/co/double_door are rotated -90° at the end (render_root transform + swapped viewBox dims).
  *    - co hides sash internals (rails/stiles/glass) and suppresses outside_boundary_sash stroke.
@@ -243,66 +229,22 @@ function mustStr(v, name) {
 // ---------------------------------------------
 
 // ---------------- PATTERN URL HELPERS ----------------
-const PATTERN_IMG_IDS = {
-  rail: "img_rail_wood",
-  stile: "img_stile_wood",
-  bevelTop: "img_bevel_top_wood",
-  bevelBottom: "img_bevel_bottom_wood",
-  bevelSide: "img_bevel_side_wood",
-  glass: "img_glass",
-  extRail: "img_ext_rail_wood",
-  extStile: "img_ext_stile_wood",
-  extBevelTop: "img_ext_bevel_top_wood",
-  extBevelBottom: "img_ext_bevel_bottom_wood",
-  extBevelSide: "img_ext_bevel_side_wood",
-};
-
-function getPatternUrlsFromDom() {
-  function mustGet(id) {
-    const img = document.getElementById(id);
-    if (!img) throw new Error(`Missing <img id="${id}"> on page (pattern preload).`);
-    const url = img.currentSrc || img.src;
-    if (!url) throw new Error(`Image "${id}" has no resolved URL yet.`);
-    return url;
-  }
+function buildPatternUrls() {
+  var base = window.TILE_BASE_URL;
+  if (!base) throw new Error("window.TILE_BASE_URL is not set.");
   return {
-    rail: mustGet(PATTERN_IMG_IDS.rail),
-    stile: mustGet(PATTERN_IMG_IDS.stile),
-    bevelTop: mustGet(PATTERN_IMG_IDS.bevelTop),
-    bevelBottom: mustGet(PATTERN_IMG_IDS.bevelBottom),
-    bevelSide: mustGet(PATTERN_IMG_IDS.bevelSide),
-    glass: mustGet(PATTERN_IMG_IDS.glass),
-    extRail: mustGet(PATTERN_IMG_IDS.extRail),
-    extStile: mustGet(PATTERN_IMG_IDS.extStile),
-    extBevelTop: mustGet(PATTERN_IMG_IDS.extBevelTop),
-    extBevelBottom: mustGet(PATTERN_IMG_IDS.extBevelBottom),
-    extBevelSide: mustGet(PATTERN_IMG_IDS.extBevelSide),
+    rail:          base + "interior_base_LR.png",
+    stile:         base + "interior_base_TB.png",
+    bevelTop:      base + "interior_dark_LR.png",
+    bevelBottom:   base + "interior_light_LR.png",
+    bevelSide:     base + "interior_medium_TB.png",
+    glass:         base + "glass-square.png",
+    extRail:       base + "exterior_base_LR.png",
+    extStile:      base + "exterior_base_TB.png",
+    extBevelTop:   base + "exterior_dark_LR.png",
+    extBevelBottom:base + "exterior_light_LR.png",
+    extBevelSide:  base + "exterior_medium_TB.png",
   };
-}
-
-function waitForPatternImages() {
-  const ids = Object.values(PATTERN_IMG_IDS);
-  const imgs = ids.map((id) => document.getElementById(id));
-  if (imgs.some((x) => !x)) {
-    const missing = ids.filter((id) => !document.getElementById(id));
-    throw new Error(`Missing pattern preload <img> ids: ${missing.join(", ")}`);
-  }
-
-  const ready = () => imgs.every((img) => img.complete && (img.currentSrc || img.src));
-  if (ready()) return Promise.resolve();
-
-  return new Promise((resolve, reject) => {
-    let remaining = imgs.length;
-    function doneOne() {
-      remaining--;
-      if (remaining <= 0) resolve();
-    }
-    imgs.forEach((img) => {
-      if (img.complete) return doneOne();
-      img.addEventListener("load", doneOne, { once: true });
-      img.addEventListener("error", () => reject(new Error("A pattern image failed to load.")), { once: true });
-    });
-  });
 }
 // ---------------------------------------------
 
@@ -1062,7 +1004,7 @@ window.build_block_svgs = function build_block_svgs(index, muntins) {
     var betaObjects = mustBeArray(betaSolution.build_objects, "comboSolution.build_objects");
     if (betaObjects.length === 0) throw new Error("comboSolution.build_objects is empty.");
 
-    var betaPatternUrls = getPatternUrlsFromDom();
+    var betaPatternUrls = buildPatternUrls();
     if (betaSolution.location === "exterior") {
       betaPatternUrls.rail = betaPatternUrls.extRail;
       betaPatternUrls.stile = betaPatternUrls.extStile;
@@ -1129,7 +1071,7 @@ window.build_block_svgs = function build_block_svgs(index, muntins) {
     return solution[cacheKey]; // already rendered
   }
 
-  const patternUrls = getPatternUrlsFromDom();
+  const patternUrls = buildPatternUrls();
 
   // Swap in exterior wood tiles when location is "exterior" (glass stays the same)
   if (solution.location === "exterior") {
