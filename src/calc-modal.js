@@ -81,6 +81,11 @@
   var HARDWARE_COLOR_WRAPPER_ID = "hardware-color-wrapper";
   var HARDWARE_SELECTOR_ID     = "hardware-selector";
   var DBL_DOOR_WRAPPER_ID      = "dbl-door-wrapper";
+  var DBL_BORE_LEFT_ID         = "door-bore-left-double";
+  var DBL_BORE_RIGHT_ID        = "door-bore-right-double";
+  var DBL_NO_BORE_ID           = "double-door-no-bore";
+  var DBL_DOOR_NOTE_ID         = "double-door-note";
+  var DBL_DOOR_NOTE_DUMMY_ID   = "double-door-note-dummy";
   var CONFIGURE_BTN_SELECTOR   = '[data-modal-configure="btn"]';
   var CONFIGURE_ENDPOINT       = "https://api.transomsdirect.com/api:xyi0dc0X/bc_combo_solution_config";
 
@@ -134,6 +139,7 @@
   // =========================================
   function openModal() {
     initHardwareColorSelector();   // lazy — runs once on first open
+    initDblDoorBoreToggle();       // lazy — runs once on first open
     var overlay = document.getElementById(MODAL_OVERLAY_ID);
     if (overlay) overlay.style.display = "flex";
     document.body.style.overflow = "hidden";
@@ -368,6 +374,93 @@
     }
   }
 
+  // =========================================
+  // DOUBLE DOOR BORE TOGGLE
+  // =========================================
+  function setDblDoorBoreToggleState(side) {
+    var leftBtn  = document.getElementById(DBL_BORE_LEFT_ID);
+    var rightBtn = document.getElementById(DBL_BORE_RIGHT_ID);
+    var noneBtn  = document.getElementById(DBL_NO_BORE_ID);
+    var note     = document.getElementById(DBL_DOOR_NOTE_ID);
+
+    if (leftBtn) {
+      if (side === "left_hand") leftBtn.classList.add(DOOR_BORE_ACTIVE_CLASS);
+      else leftBtn.classList.remove(DOOR_BORE_ACTIVE_CLASS);
+    }
+    if (rightBtn) {
+      if (side === "right_hand") rightBtn.classList.add(DOOR_BORE_ACTIVE_CLASS);
+      else rightBtn.classList.remove(DOOR_BORE_ACTIVE_CLASS);
+    }
+    if (noneBtn) {
+      if (side === "none") noneBtn.classList.add(DOOR_BORE_ACTIVE_CLASS);
+      else noneBtn.classList.remove(DOOR_BORE_ACTIVE_CLASS);
+    }
+    var noteDummy = document.getElementById(DBL_DOOR_NOTE_DUMMY_ID);
+    if (note) {
+      note.style.display = (side === "left_hand" || side === "right_hand") ? "block" : "none";
+    }
+    if (noteDummy) {
+      noteDummy.style.display = (side === "none") ? "block" : "none";
+    }
+  }
+
+  function applyDblDoorBoreToggle(side) {
+    if (currentModalIndex === null) return;
+    var solution = window.comboSolutions[currentModalIndex];
+    if (!solution) return;
+
+    solution.operating_door = side;
+
+    // Invalidate assembly caches so next full render re-serializes with correct state
+    delete solution.assembly_svg;
+    delete solution.assembly_svg_no_muntins;
+
+    // Update the live mounted SVG directly (no full re-render needed)
+    if (typeof window.updateBoreVisibility === "function") {
+      window.updateBoreVisibility(side);
+    }
+
+    // Hinge visibility for double doors
+    if (typeof window.updateHingeVisibility === "function") {
+      window.updateHingeVisibility("double_door", side);
+    }
+
+    // Update door type label in modal grid
+    updateDoorTypeLabelsInModal(side);
+  }
+
+  var _dblDoorBoreInited = false;
+  function initDblDoorBoreToggle() {
+    if (_dblDoorBoreInited) return;
+    _dblDoorBoreInited = true;
+
+    var leftBtn  = document.getElementById(DBL_BORE_LEFT_ID);
+    var rightBtn = document.getElementById(DBL_BORE_RIGHT_ID);
+    var noneBtn  = document.getElementById(DBL_NO_BORE_ID);
+
+    if (leftBtn) {
+      leftBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        setDblDoorBoreToggleState("left_hand");
+        applyDblDoorBoreToggle("left_hand");
+      });
+    }
+    if (rightBtn) {
+      rightBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        setDblDoorBoreToggleState("right_hand");
+        applyDblDoorBoreToggle("right_hand");
+      });
+    }
+    if (noneBtn) {
+      noneBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        setDblDoorBoreToggleState("none");
+        applyDblDoorBoreToggle("none");
+      });
+    }
+  }
+
   /** Show/hide #choose-door-bore and set toggle to match solution. */
   function configureDoorBoreForModal(solution) {
     var chooser = document.getElementById(CHOOSE_DOOR_BORE_ID);
@@ -462,7 +555,17 @@
   function configureDblDoorWrapperForModal(solution) {
     var wrapper = document.getElementById(DBL_DOOR_WRAPPER_ID);
     if (!wrapper) return;
-    wrapper.style.display = solutionHasDoubleDoor(solution) ? "flex" : "none";
+
+    if (solutionHasDoubleDoor(solution)) {
+      wrapper.style.display = "flex";
+      // Default operating_door to "none" for double doors if not yet set
+      if (!solution.operating_door) {
+        solution.operating_door = "none";
+      }
+      setDblDoorBoreToggleState(solution.operating_door);
+    } else {
+      wrapper.style.display = "none";
+    }
   }
 
   // =========================================

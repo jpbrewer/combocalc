@@ -136,6 +136,10 @@
  *  - Single-door blocks include two bore circle groups (<g data-bore="left"> and <g data-bore="right">)
  *    in the sash group. Bore circles: 2.125" diameter, 36" from bottom, 2.375" from door edge (centerline),
  *    white fill with boundary stroke styling. Visibility is controlled post-mount by window.updateBoreVisibility().
+ *  - Double-door blocks include two bore circle groups (<g data-bore-slab="left"> and <g data-bore-slab="right">),
+ *    one per slab, on the meeting stile (center edge). After -90° rotation: leaf1=left slab, leaf2=right slab.
+ *    Bore goes on the OPPOSITE slab from operating_door (e.g., operating_door="left_hand" → bore on right slab).
+ *    Visibility is controlled post-mount by window.updateBoreVisibility().
  *  - Door hinge rendering (single_door and double_door):
  *    - Two groups per leaf: <g data-hinge="left"> and <g data-hinge="right"> (leaf2 uses data-hinge-leaf2).
  *    - Each group contains 3 filled rects (0.5" wide x 3.5" tall) at 7", 38", 69" from door bottom.
@@ -738,6 +742,58 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
     sashGroup.appendChild(boreLeftG);
   }
 
+  // ---- Double door bore circles ----
+  // One bore per slab, on the meeting stile (center edge where the two doors meet).
+  // After -90° rotation: leaf1 = left slab, leaf2 = right slab.
+  // Bore goes on the OPPOSITE slab from operating_door:
+  //   operating_door="left_hand" → bore on right slab (data-bore-slab="right")
+  //   operating_door="right_hand" → bore on left slab (data-bore-slab="left")
+  // Visibility controlled post-mount by updateBoreVisibility().
+  if (IS_DOUBLE_DOOR) {
+    var BORE_DIAMETER_DBL = 2.125 * PX_PER_INCH;
+    var BORE_RADIUS_DBL = BORE_DIAMETER_DBL / 2;
+    var BORE_FROM_BOTTOM_DBL = 36 * PX_PER_INCH;
+    var BORE_FROM_EDGE_DBL = 2.375 * PX_PER_INCH;
+    var svgNsDbore = "http://www.w3.org/2000/svg";
+
+    // Pre-rotation: 36" from bottom = 36" from left edge (x axis)
+    var dboreCx = sx + BORE_FROM_BOTTOM_DBL;
+
+    // Left slab (leaf1): meeting stile is the BOTTOM edge in pre-rotation (right edge after rotation)
+    var dboreLeftCy = sy + LEAF_HEIGHT - BORE_FROM_EDGE_DBL;
+
+    var boreSlabLeftG = doc.createElementNS(svgNsDbore, "g");
+    boreSlabLeftG.setAttribute("data-bore-slab", "left");
+    var boreSlabLeftCircle = doc.createElementNS(svgNsDbore, "circle");
+    boreSlabLeftCircle.setAttribute("cx", String(dboreCx));
+    boreSlabLeftCircle.setAttribute("cy", String(dboreLeftCy));
+    boreSlabLeftCircle.setAttribute("r", String(BORE_RADIUS_DBL));
+    boreSlabLeftCircle.setAttribute("fill", "white");
+    boreSlabLeftCircle.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
+    boreSlabLeftCircle.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
+    boreSlabLeftCircle.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+    boreSlabLeftCircle.setAttribute("vector-effect", "non-scaling-stroke");
+    boreSlabLeftG.appendChild(boreSlabLeftCircle);
+    renderRootEl.appendChild(boreSlabLeftG);
+
+    // Right slab (leaf2): meeting stile is the TOP edge in pre-rotation (left edge after rotation)
+    var dboreRightCy = sy + LEAF_PITCH_Y + BORE_FROM_EDGE_DBL;
+
+    var boreSlabRightG = doc.createElementNS(svgNsDbore, "g");
+    boreSlabRightG.setAttribute("data-bore-slab", "right");
+    var boreSlabRightCircle = doc.createElementNS(svgNsDbore, "circle");
+    boreSlabRightCircle.setAttribute("cx", String(dboreCx));
+    boreSlabRightCircle.setAttribute("cy", String(dboreRightCy));
+    boreSlabRightCircle.setAttribute("r", String(BORE_RADIUS_DBL));
+    boreSlabRightCircle.setAttribute("fill", "white");
+    boreSlabRightCircle.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
+    boreSlabRightCircle.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
+    boreSlabRightCircle.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+    boreSlabRightCircle.setAttribute("vector-effect", "non-scaling-stroke");
+    boreSlabRightG.appendChild(boreSlabRightCircle);
+    renderRootEl.appendChild(boreSlabRightG);
+  }
+
   // ---- Door hinges (single_door and double_door) ----
   // Rendered as solid-fill rectangles on both stile sides; visibility set post-mount
   // by window.updateHingeVisibility(). In pre-rotation coordinates:
@@ -786,6 +842,84 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
       var yOff2 = LEAF_PITCH_Y;
       renderRootEl.appendChild(createHingeGroup("data-hinge-leaf2", "left", sx, sy + yOff2 - HINGE_WIDE_PX));
       renderRootEl.appendChild(createHingeGroup("data-hinge-leaf2", "right", sx, sy + yOff2 + LEAF_HEIGHT));
+
+      // ---- Double door slide bolts ----
+      // One bolt per slab at the TOP of the door (pre-rot right edge = large X),
+      // ~2" from the outer stile. Bolt shows on the operating/swinging slab.
+      // Visibility controlled post-mount by updateBoreVisibility().
+      var BOLT_FROM_EDGE = 2 * PX_PER_INCH; // 2" from outer stile edge
+
+      // Left slab bolt (leaf1): meeting stile = pre-rot bottom (y=sy+LEAF_HEIGHT)
+      var boltLeftG = doc.createElementNS(svgNsHinge, "g");
+      boltLeftG.setAttribute("data-bolt-slab", "left");
+      var boltLeftRect = doc.createElementNS(svgNsHinge, "rect");
+      boltLeftRect.setAttribute("x", String(sx + LEAF_WIDTH - HINGE_TALL_PX));
+      boltLeftRect.setAttribute("y", String(sy + LEAF_HEIGHT - BOLT_FROM_EDGE - HINGE_WIDE_PX));
+      boltLeftRect.setAttribute("width", String(HINGE_TALL_PX));
+      boltLeftRect.setAttribute("height", String(HINGE_WIDE_PX));
+      boltLeftRect.setAttribute("fill", hingeFill);
+      boltLeftRect.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
+      boltLeftRect.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
+      boltLeftRect.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+      boltLeftRect.setAttribute("vector-effect", "non-scaling-stroke");
+      boltLeftG.appendChild(boltLeftRect);
+      renderRootEl.appendChild(boltLeftG);
+
+      // Right slab bolt (leaf2): meeting stile = pre-rot top of leaf2 (y=sy+LEAF_PITCH_Y)
+      var boltRightG = doc.createElementNS(svgNsHinge, "g");
+      boltRightG.setAttribute("data-bolt-slab", "right");
+      var boltRightRect = doc.createElementNS(svgNsHinge, "rect");
+      boltRightRect.setAttribute("x", String(sx + LEAF_WIDTH - HINGE_TALL_PX));
+      boltRightRect.setAttribute("y", String(sy + LEAF_PITCH_Y + BOLT_FROM_EDGE));
+      boltRightRect.setAttribute("width", String(HINGE_TALL_PX));
+      boltRightRect.setAttribute("height", String(HINGE_WIDE_PX));
+      boltRightRect.setAttribute("fill", hingeFill);
+      boltRightRect.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
+      boltRightRect.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
+      boltRightRect.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+      boltRightRect.setAttribute("vector-effect", "non-scaling-stroke");
+      boltRightG.appendChild(boltRightRect);
+      renderRootEl.appendChild(boltRightG);
+
+      // ---- Double door ball catches ----
+      // Small hardware in the head jamb above each slab, ~2" from meeting stile.
+      // Half the size of a hinge (1.75" x 0.25"). Shown only when operating_door="none".
+      // Visibility controlled post-mount by updateBoreVisibility().
+      var CATCH_TALL = HINGE_TALL_PX / 2;  // 1.75" along X (protrusion into jamb)
+      var CATCH_WIDE = HINGE_WIDE_PX / 2;  // 0.25" along Y (width along door top)
+      var CATCH_FROM_EDGE = 2 * PX_PER_INCH; // 2" from meeting stile
+
+      // Left slab catch (leaf1): meeting stile at y=sy+LEAF_HEIGHT, jamb above top at x=sx+LEAF_WIDTH
+      var catchLeftG = doc.createElementNS(svgNsHinge, "g");
+      catchLeftG.setAttribute("data-catch", "left");
+      var catchLeftRect = doc.createElementNS(svgNsHinge, "rect");
+      catchLeftRect.setAttribute("x", String(sx + LEAF_WIDTH));
+      catchLeftRect.setAttribute("y", String(sy + LEAF_HEIGHT - CATCH_FROM_EDGE - CATCH_TALL));
+      catchLeftRect.setAttribute("width", String(CATCH_WIDE));
+      catchLeftRect.setAttribute("height", String(CATCH_TALL));
+      catchLeftRect.setAttribute("fill", hingeFill);
+      catchLeftRect.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
+      catchLeftRect.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
+      catchLeftRect.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+      catchLeftRect.setAttribute("vector-effect", "non-scaling-stroke");
+      catchLeftG.appendChild(catchLeftRect);
+      renderRootEl.appendChild(catchLeftG);
+
+      // Right slab catch (leaf2): meeting stile at y=sy+LEAF_PITCH_Y, jamb above top at x=sx+LEAF_WIDTH
+      var catchRightG = doc.createElementNS(svgNsHinge, "g");
+      catchRightG.setAttribute("data-catch", "right");
+      var catchRightRect = doc.createElementNS(svgNsHinge, "rect");
+      catchRightRect.setAttribute("x", String(sx + LEAF_WIDTH));
+      catchRightRect.setAttribute("y", String(sy + LEAF_PITCH_Y + CATCH_FROM_EDGE));
+      catchRightRect.setAttribute("width", String(CATCH_WIDE));
+      catchRightRect.setAttribute("height", String(CATCH_TALL));
+      catchRightRect.setAttribute("fill", hingeFill);
+      catchRightRect.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
+      catchRightRect.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
+      catchRightRect.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+      catchRightRect.setAttribute("vector-effect", "non-scaling-stroke");
+      catchRightG.appendChild(catchRightRect);
+      renderRootEl.appendChild(catchRightG);
     }
   }
 

@@ -113,7 +113,10 @@
  * - Global functions exposed:
  *     build_assembly_svg(index, muntins, mountTarget)
  *     updateBoreVisibility(boreSide, container)
- *       - boreSide ("left_hand"|"right_hand"): sets display on [data-bore] groups in the mounted SVG; mapped to "left"/"right" internally.
+ *       - boreSide ("left_hand"|"right_hand"|"none"): sets display on bore groups in the mounted SVG.
+ *       - Single-door: shows matching [data-bore] group ("left"/"right"), hides the other.
+ *       - Double-door: shows [data-bore-slab] on the OPPOSITE slab from operating_door
+ *         (e.g., "left_hand" → show right slab bore, hide left). "none" hides both.
  *       - container (optional HTMLElement): defaults to last mount target or #explore.
  *       - Called automatically after every mount (cached or fresh) using solution.operating_door || "right_hand".
  *       - Also called by calc-modal.js door bore toggle for instant DOM-only switching.
@@ -250,7 +253,8 @@ function _resolveMountTarget(target) {
 
 /**
  * Sets the visibility of door bore circles in the mounted SVG.
- * @param {string} boreSide - "left" or "right"
+ * Handles both single-door (data-bore) and double-door (data-bore-slab) elements.
+ * @param {string} boreSide - "left_hand", "right_hand", or "none"
  * @param {HTMLElement} [container] - optional mount container; defaults to last mount target or #explore
  */
 function updateBoreVisibility(boreSide, container) {
@@ -258,10 +262,40 @@ function updateBoreVisibility(boreSide, container) {
   if (!el) return;
   // Map operating_door values to SVG data-bore attribute values
   var svgSide = boreSide === "left_hand" ? "left" : boreSide === "right_hand" ? "right" : boreSide;
+
+  // Single-door bore circles (data-bore="left" / "right")
   var boreLeft = el.querySelector('[data-bore="left"]');
   var boreRight = el.querySelector('[data-bore="right"]');
   if (boreLeft) boreLeft.style.display = (svgSide === "left") ? "" : "none";
   if (boreRight) boreRight.style.display = (svgSide === "right") ? "" : "none";
+
+  // Double-door bore circles (data-bore-slab="left" / "right")
+  // Bore goes on the OPPOSITE slab from operating_door:
+  //   operating_door="left_hand" (svgSide="left") → show right slab bore, hide left
+  //   operating_door="right_hand" (svgSide="right") → show left slab bore, hide right
+  //   "none" → hide both
+  var boreSlabLeft = el.querySelector('[data-bore-slab="left"]');
+  var boreSlabRight = el.querySelector('[data-bore-slab="right"]');
+  if (boreSlabLeft) boreSlabLeft.style.display = (svgSide === "right") ? "" : "none";
+  if (boreSlabRight) boreSlabRight.style.display = (svgSide === "left") ? "" : "none";
+
+  // Double-door slide bolts (data-bolt-slab="left" / "right")
+  // Bolt shows on the SAME slab as operating_door (the swinging door):
+  //   operating_door="left_hand" (svgSide="left") → show left slab bolt
+  //   operating_door="right_hand" (svgSide="right") → show right slab bolt
+  //   "none" → hide both
+  var boltSlabLeft = el.querySelector('[data-bolt-slab="left"]');
+  var boltSlabRight = el.querySelector('[data-bolt-slab="right"]');
+  if (boltSlabLeft) boltSlabLeft.style.display = (svgSide === "left") ? "" : "none";
+  if (boltSlabRight) boltSlabRight.style.display = (svgSide === "right") ? "" : "none";
+
+  // Double-door ball catches (data-catch="left" / "right")
+  // Both show only when operating_door="none" (no bore, no bolt):
+  var isNone = (svgSide !== "left" && svgSide !== "right");
+  var catchLeft = el.querySelector('[data-catch="left"]');
+  var catchRight = el.querySelector('[data-catch="right"]');
+  if (catchLeft) catchLeft.style.display = isNone ? "" : "none";
+  if (catchRight) catchRight.style.display = isNone ? "" : "none";
 }
 window.updateBoreVisibility = updateBoreVisibility;
 
@@ -305,7 +339,7 @@ window.updateHingeVisibility = updateHingeVisibility;
 function updateHingeColor(hexColor, container) {
   var el = container || _resolveMountTarget();
   if (!el) return;
-  var rects = el.querySelectorAll('[data-hinge] rect, [data-hinge-leaf2] rect');
+  var rects = el.querySelectorAll('[data-hinge] rect, [data-hinge-leaf2] rect, [data-bolt-slab] rect, [data-catch] rect');
   for (var i = 0; i < rects.length; i++) {
     rects[i].setAttribute("fill", hexColor);
   }
