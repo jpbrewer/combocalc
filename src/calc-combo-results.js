@@ -13,7 +13,7 @@
  * Context:
  *  - Runs in-browser as a single drop-in <script> embedded in Webflow (no bundler/modules).
  *  - Exists because Webflow’s native form submission + conditional UI logic is insufficient for async “request → poll → render” workflows.
- *  - Uses a hidden “icon registry” (Webflow Assets) to map logical icon filenames (e.g., /icons/arrangement_14_icon.png) to Webflow-hosted asset URLs.
+ *  - Resolves arrangement icon URLs from `window.ICON_BASE_URL` (set by bootstrap loader) + filename.
  *
  * Source of truth:
  *  - Authoritative state:
@@ -22,7 +22,7 @@
  *    - DOM dataset on Explore buttons (data-solution-index via element.dataset.solutionIndex): index pointer into window.comboSolutions.
  *  - Derived/synced state:
  *    - Rendered solution cards/rows are derived from window.comboSolutions[*].solution_grid.
- *    - Icon <img src> is derived from solution.icon + ICON_MAP lookup (from #icon_registry).
+ *    - Icon <img src> is derived from solution.icon + resolveIconUrl() (constructs URL from ICON_BASE_URL + filename).
  *    - Submit button label/disabled/greyed style is derived from request/poll lifecycle.
  *
  * Inputs (reads):
@@ -34,7 +34,6 @@
  *    - #search_again            (“Search Again” button; click triggers resetUI)
  *    - #solutions_area          (wrapper around the solutions UI; hidden until poll success)
  *    - #blocker_form            (overlay “blocker” for the form; shown after poll success, hidden on reset)
- *    - #icon_registry           (hidden container; contains <img data-icon-name="..."> entries mapping filenames → asset URLs)
  *    - #wait_message           (div; polling wait-message container — hidden by default; shown (display:flex) during polling, hidden on success/failure)
  *    NOTE: Modal DOM IDs (#modal-overlay, #modal-panel, #modal-close, #no-muntin, #yes-muntin,
  *    #choose-door-bore, #door-bore-left, #door-bore-right, #hardware_wrapper_div, #hardware-color-wrapper,
@@ -102,7 +101,7 @@
  *  - window.job_id              (Number; assigned after initial request)
  *  - window.comboSolutions      (Array<Solution>; assigned after successful retrieval)
  *  - window._comboCalc          (Object; shared utility namespace for calc-modal.js and other modules)
- *    Contains: setField, stripWebflowInteractionIds, POS_ORDER, normalizeIconKey, ICON_MAP,
+ *    Contains: setField, stripWebflowInteractionIds, POS_ORDER, resolveIconUrl,
  *    decimalToFraction, FRACTION_TABLE, resolveDoorTypeLabel, solutionHasSingleDoor,
  *    solutionHasDoubleDoor, solutionHasAnyDoor, ensureOperatingDoorDefault, resolveHardwareHex, postJson.
  *    calc-modal.js also writes closeModal onto this namespace.
@@ -124,20 +123,19 @@
  *      - populating [data-field="..."] nodes with solution_grid values
  *      - line_notes "XX" marker replaced with "Height" in listing cards
  *      - cloning summary row for unit_notes (above solution_notes) and solution_notes (below position rows)
- *      - setting icon <img data-field="icon"> src via ICON_MAP (or fallback resolution)
+ *      - setting icon <img data-field="icon"> src via resolveIconUrl() (ICON_BASE_URL + filename)
  *    NOTE: Modal overlay, modal data grid, and modal toggle behavior are now in calc-modal.js.
  *
  *  Data Produced:
  *  - Normalized solution objects stored in window.comboSolutions:
  *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta, opening_width, opening_height, jamb_depth, location, operating_door }
- *  - ICON_MAP (internal) created from #icon_registry: filename → Webflow asset URL.
  *
  * Load Order / Dependencies:
  *  - Must run after the Webflow page DOM exists (uses DOMContentLoaded).
  *  - Must run on pages that include:
  *    - the form (#wf_form_combo), solutions template structure, and modal structure.
  *  - build_assembly_svg(index) should be loaded before any Explore click occurs (can load after this file).
- *  - Icon registry (#icon_registry) must exist before init() for mapping; if missing, icons fall back to origin-relative/absolute URLs (may 404 on Webflow).
+ *  - `window.ICON_BASE_URL` should be set (by bootstrap loader) before icon rendering occurs.
  *  - Runs automatically on load; no explicit init call required.
  *
  * Side Effects:
@@ -198,7 +196,6 @@
 
   const BLOCKER_FORM_ID = "blocker_form";
 
-  const ICON_REGISTRY_ID = "icon_registry";
 
   const REQUEST_ENDPOINT_URL =
     "https://api.transomsdirect.com/api:xyi0dc0X/bc_combo_solution_request";
@@ -236,7 +233,6 @@
   let ORIGINAL_BTN_COLOR = null;
   let ORIGINAL_BTN_BORDER = null;
 
-  const ICON_MAP = Object.create(null);
 
   // =========================================
   // UTILS
@@ -334,24 +330,24 @@
   }
 
   // =========================================
-  // ICON REGISTRY
+  // ICON URL RESOLUTION
   // =========================================
-  function buildIconMapFromRegistry() {
-    const reg = document.getElementById(ICON_REGISTRY_ID);
-    if (!reg) return;
-
-    reg.querySelectorAll("img[data-icon-name]").forEach((img) => {
-      const name = (img.getAttribute("data-icon-name") || "").trim();
-      const src = (img.getAttribute("src") || "").trim();
-      if (!name || !src) return;
-      ICON_MAP[name] = src;
-    });
-  }
-
   function normalizeIconKey(iconPath) {
     if (!iconPath) return "";
     const parts = String(iconPath).split("/");
     return parts[parts.length - 1].trim();
+  }
+
+  function resolveIconUrl(iconPath) {
+    if (!iconPath) return "";
+    var raw = String(iconPath).trim();
+    if (/^https?:\/\//i.test(raw)) return raw;
+    var base = window.ICON_BASE_URL;
+    if (!base) {
+      console.warn("window.ICON_BASE_URL not set; icon URL cannot be resolved:", raw);
+      return raw;
+    }
+    return base + normalizeIconKey(raw);
   }
 
   // =========================================
@@ -650,29 +646,15 @@
     const img = wrapper.querySelector('[data-field="icon"]');
     if (!img) return;
 
-    if (!iconPath) {
+    var resolved = resolveIconUrl(iconPath);
+    if (!resolved) {
       img.removeAttribute("src");
       img.alt = "";
       return;
     }
 
-    const raw = String(iconPath).trim();
-    const looksAbsolute = /^https?:\/\//i.test(raw);
-
-    let resolved = raw;
-
-    if (!looksAbsolute) {
-      const filename = normalizeIconKey(raw);
-      if (ICON_MAP[filename]) {
-        resolved = ICON_MAP[filename];
-      } else {
-        resolved = new URL(raw, window.location.origin).href;
-        console.warn("Icon not found in registry; fallback:", resolved, "original:", raw);
-      }
-    }
-
     img.alt = "Arrangement icon";
-    img.onerror = () => console.warn("Icon failed to load:", resolved, "original:", raw);
+    img.onerror = function () { console.warn("Icon failed to load:", resolved); };
     img.src = resolved;
   }
 
@@ -815,7 +797,6 @@
   // INIT
   // =========================================
   function init() {
-    buildIconMapFromRegistry();
     hideSolutionsArea();
     // Modal init moved to calc-modal.js
 
@@ -961,8 +942,7 @@
     setField:                     setField,
     stripWebflowInteractionIds:   stripWebflowInteractionIds,
     POS_ORDER:                    POS_ORDER,
-    normalizeIconKey:             normalizeIconKey,
-    ICON_MAP:                     ICON_MAP,
+    resolveIconUrl:               resolveIconUrl,
     decimalToFraction:            decimalToFraction,
     FRACTION_TABLE:               FRACTION_TABLE,
     resolveDoorTypeLabel:         resolveDoorTypeLabel,

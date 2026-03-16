@@ -4,3 +4,9 @@
 # Local HTTPS dev certs (mkcert)
 localhost.pem
 localhost-key.pem
+
+# docs
+/prompts
+
+# tools
+/.vscode

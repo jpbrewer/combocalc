@@ -40,13 +40,16 @@
  * Outputs (produces):
  *
  *  Public API:
- *  - None directly.
+ *  - window.TILE_BASE_URL (string): base URL for tile/pattern image assets.
+ *  - window.ICON_BASE_URL (string): base URL for arrangement icon assets.
  *  - Loads modules that attach globals to window.
  *
  *  DOM Mutations:
  *  - Appends <script> tags to <head>.
  *
  *  Data Produced:
+ *  - window.TILE_BASE_URL and window.ICON_BASE_URL: configurable asset base URLs
+ *    (set before scripts load; consumed by calc-svg-block-builder.js and calc-combo-results.js).
  *  - Indirectly produces all downstream module globals.
  *
  * Load Order / Dependencies:
@@ -81,9 +84,13 @@
 (function () {
 
   const BASE =
-  "https://localhost:3000/";  
+  "https://localhost:3000/";
   //"https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@main/";
-  
+
+  // Asset base URLs — consumed by downstream modules for tile patterns and icons.
+  // Update these when moving assets to a production web server.
+  window.TILE_BASE_URL = "https://localhost:3001/assets/tiles/";
+  window.ICON_BASE_URL = "https://localhost:3001/assets/icons/";
 
   /**
    * IMPORTANT:

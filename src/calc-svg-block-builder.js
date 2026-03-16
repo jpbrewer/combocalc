@@ -7,9 +7,12 @@
  *
  * Purpose:
  *  - Renders parametric, face-on 2D window/door/sidelite SVGs in-browser from a single template SVG string.
- *  - Reads a “solution” object from `window.comboSolutions[index]`, iterates its `build_objects`, and produces SVG strings.
- *  - Injects external PNG-based SVG `<pattern>` defs (wood + glass) using Webflow CDN-resolved `<img>` URLs.
- *  - Writes results back onto the solution object as `building_block_svgs[block_pos] = "<svg...>"`.
+ *  - Supports two modes, detected automatically at the top of `build_block_svgs`:
+ *    - Alpha mode: reads from `window.comboSolutions[index]` (array of solutions). Supports muntin toggle and dual-cache.
+ *    - Beta mode:  reads from `window.comboSolution` (singular object). Rows/cols pre-resolved, no muntin logic, no caching.
+ *  - Iterates a solution's `build_objects` and produces SVG strings.
+ *  - Injects external PNG-based SVG `<pattern>` defs (wood + glass) using URLs constructed from `window.TILE_BASE_URL`.
+ *  - Writes results back onto the solution object as `building_block_svgs[block_pos] = “<svg...>”`.
  *
  * Context:
  *  - Built as a Webflow-friendly “drop-in” script (HTML Embed) because Webflow is browser-only and not a bundler/runtime.
@@ -18,36 +21,27 @@
  *
  * Source of truth:
  *  - Authoritative inputs:
- *    - `window.comboSolutions[index].build_objects` (array of “block request” objects) is the sole data source for geometry.
+ *    - Alpha: `window.comboSolutions[index].build_objects` (array of “block request” objects) is the data source for geometry.
+ *    - Beta:  `window.comboSolution.build_objects` (same shape, rows/cols pre-resolved, no suggested_rows/suggested_cols).
  *    - `window.WINDOW_TYPE_A_SVG_TEXT` (string) is the authoritative SVG template layout / IDs / grouping.
- *    - Pattern image URLs are sourced from DOM `<img>` elements via `img.currentSrc || img.src`.
+ *    - Pattern image URLs are constructed from `window.TILE_BASE_URL` + filename (set by bootstrap loader).
  *  - Derived/synced state:
- *    - Output SVG strings are derived and stored into `window.comboSolutions[index].building_block_svgs`.
+ *    - Alpha: output SVG strings stored into `window.comboSolutions[index].building_block_svgs` or `building_block_svgs_no_muntins`.
+ *    - Beta:  output SVG strings stored into `window.comboSolution.building_block_svgs` (no `_no_muntins` variant).
  *    - Pattern `<defs>/<pattern>/<image>` nodes are derived and injected per rendered SVG (not persisted elsewhere).
  *
  * Inputs (reads):
  *
  *  DOM Contract:
- *  - Required DOM IDs (these are `<img>` element IDs; NOT inputs/wrappers/labels):
- *    - #img_rail_wood          (PNG for rails/jamb_top/jamb_bottom/muntin_horizontal)
- *    - #img_stile_wood         (PNG for stiles/jamb_left/jamb_right/muntin_vertical)
- *    - #img_bevel_top_wood     (PNG for bevel top)
- *    - #img_bevel_bottom_wood  (PNG for bevel bottom)
- *    - #img_bevel_side_wood    (PNG for bevel left/right)
- *    - #img_glass              (PNG for glass)
- *    - #img_ext_rail_wood      (PNG for exterior rails)
- *    - #img_ext_stile_wood     (PNG for exterior stiles)
- *    - #img_ext_bevel_top_wood (PNG for exterior bevel top)
- *    - #img_ext_bevel_bottom_wood (PNG for exterior bevel bottom)
- *    - #img_ext_bevel_side_wood   (PNG for exterior bevel left/right)
- *  - Structural assumptions:
- *    - These <img> elements exist in the DOM when rendering runs, and have resolvable URLs (currentSrc/src).
+ *  - No DOM elements required for tile/pattern images (URLs constructed from window.TILE_BASE_URL).
  *
  *  Data Contract:
  *  - Required globals:
  *    - `window.WINDOW_TYPE_A_SVG_TEXT` (string): the full SVG template text.
- *    - `window.comboSolutions` (array): solutions array.
- *    - `window.comboSolutions[index].build_objects` (array): block request objects.
+ *    - `window.TILE_BASE_URL` (string): base URL for tile/pattern PNG assets (set by bootstrap loader).
+ *    - Alpha: `window.comboSolutions` (array): solutions array.
+ *    - Alpha: `window.comboSolutions[index].build_objects` (array): block request objects.
+ *    - Beta:  `window.comboSolution` (object): single solution with pre-resolved rows/cols.
  *    - `window.comboSolutions[index].location` (string, optional): "interior" or "exterior".
  *      When "exterior", wood tile patterns are swapped to exterior variants; glass unchanged.
  *  - Required per-block fields inside each `build_objects[]` entry (as used by this file):
@@ -80,7 +74,7 @@
  *  - Runs in a modern browser with:
  *    - DOMParser / XMLSerializer support.
  *    - CSS.escape support.
- *  - Pattern images should be loaded before rendering; helper `waitForPatternImages()` is provided.
+ *  - Pattern image URLs are constructed at render time from `window.TILE_BASE_URL`; no DOM preload required.
  *  - No Webflow “redirected input” syncing is used in this file. (No references to `w--redirected-checked`, `w-radio-input`,
  *    `w-checkbox-input`, etc. appear in the code as currently written.)
  *
@@ -88,41 +82,42 @@
  *
  *  Public API:
  *  - `window.build_block_svgs(index, muntins)`:
- *    - index (number): position in window.comboSolutions.
- *    - muntins (boolean, optional): when false, forces rows=1/cols=1 (no muntins).
- *      When true (default), reads suggested_rows/suggested_cols from each build object,
- *      falling back to rows/cols if the suggested fields are absent.
- *    - Reads `window.comboSolutions[index].build_objects`.
- *    - Produces/returns block SVGs in a cache slot on the solution object.
- *  - `waitForPatternImages()` (defined in-file; not attached to window explicitly) (inferred: callable within the embed scope).
+ *    - index (number): Alpha: position in window.comboSolutions. Beta: ignored.
+ *    - muntins (boolean, optional): Alpha: when false, forces rows=1/cols=1 (no muntins);
+ *      when true (default), reads suggested_rows/suggested_cols falling back to rows/cols.
+ *      Beta: ignored (rows/cols used directly).
+ *    - Alpha: reads `window.comboSolutions[index].build_objects`, writes to dual-cache slots.
+ *    - Beta:  reads `window.comboSolution.build_objects`, writes to `building_block_svgs` (no caching).
  *
  *  DOM Mutations:
  *  - None on the page DOM (no page elements are modified).
  *  - All DOM manipulation is performed on an in-memory SVG document created by DOMParser per rendered SVG string.
  *
  *  Data Produced:
- *  - Cache keys on the solution object (dual-cache for muntin toggle):
+ *  - Alpha cache keys on the solution object (dual-cache for muntin toggle):
  *    - `building_block_svgs` (muntins=true): block SVGs with suggested_rows/suggested_cols (or rows/cols fallback).
  *    - `building_block_svgs_no_muntins` (muntins=false): block SVGs with rows=1, cols=1.
- *  - Each cache is populated as: cache[block_pos] = "<svg ...>...</svg>" (serialized SVG string)
+ *    - Each cache is populated as: cache[block_pos] = "<svg ...>...</svg>" (serialized SVG string)
+ *  - Beta output:
+ *    - `building_block_svgs`: block SVGs with pre-resolved rows/cols. Always freshly rendered (no caching).
  *
  * Load Order / Dependencies:
  *  - Must load AFTER:
  *    - `window.WINDOW_TYPE_A_SVG_TEXT` is assigned.
- *    - `window.comboSolutions` is available (or at least before calling `window.build_block_svgs`).
- *    - The pattern preload <img> elements exist in the DOM and have resolved URLs.
+ *    - Alpha: `window.comboSolutions` is available (or at least before calling `window.build_block_svgs`).
+ *    - Beta:  `window.comboSolution` is available before calling `window.build_block_svgs`.
+ *    - `window.TILE_BASE_URL` is set (by bootstrap loader).
  *  - Does NOT auto-run rendering on load; rendering occurs only when `window.build_block_svgs(index)` is called.
  *
  * Side Effects:
- *  - Network calls (fetch/polling): No (but pattern images may load via normal browser image loading outside this script).
+ *  - Network calls (fetch/polling): No (pattern image URLs are referenced in SVG; browser fetches them on render).
  *  - localStorage/cookies: No.
- *  - Timers / intervals / requestAnimationFrame: No (except Promise-based waiting via image load events in helper).
- *  - Event listeners added:
- *    - `waitForPatternImages()` adds one-time `load` and `error` listeners to the six pattern <img> elements when needed.
+ *  - Timers / intervals / requestAnimationFrame: No.
+ *  - Event listeners added: None.
  *
  * Failure Behavior:
- *  - Missing globals / missing DOM IDs / missing template IDs:
- *    - Throws Errors (hard-fail) with descriptive messages (e.g., “Template missing …”, “Missing <img id=…>”).
+ *  - Missing globals / missing template IDs:
+ *    - Throws Errors (hard-fail) with descriptive messages (e.g., “Template missing …”, “TILE_BASE_URL is not set”).
  *  - Invalid geometry:
  *    - Throws Errors for impossible constraints (e.g., SR sums exceed leaf dims; lite too small for bevel thickness).
  *  - Current behavior is “fail-fast” rather than “fail-soft”.
@@ -131,7 +126,7 @@
  * Rule Summary / Invariants:
  *  - Rendering is driven ONLY by `build_objects` for the selected solution index; output is written to `building_block_svgs`.
  *  - Template SVG IDs are treated as stable “API”; any ID/group rename in template must be reflected here.
- *  - Patterns are NOT embedded as base64; they are referenced as external URLs resolved from Webflow CDN `<img>` elements.
+ *  - Patterns are NOT embedded as base64; they are referenced as external URLs constructed from `window.TILE_BASE_URL`.
  *  - `construction` governs rotation / hiding:
  *    - door/sidelite/co/double_door are rotated -90° at the end (render_root transform + swapped viewBox dims).
  *    - co hides sash internals (rails/stiles/glass) and suppresses outside_boundary_sash stroke.
@@ -234,66 +229,22 @@ function mustStr(v, name) {
 // ---------------------------------------------
 
 // ---------------- PATTERN URL HELPERS ----------------
-const PATTERN_IMG_IDS = {
-  rail: "img_rail_wood",
-  stile: "img_stile_wood",
-  bevelTop: "img_bevel_top_wood",
-  bevelBottom: "img_bevel_bottom_wood",
-  bevelSide: "img_bevel_side_wood",
-  glass: "img_glass",
-  extRail: "img_ext_rail_wood",
-  extStile: "img_ext_stile_wood",
-  extBevelTop: "img_ext_bevel_top_wood",
-  extBevelBottom: "img_ext_bevel_bottom_wood",
-  extBevelSide: "img_ext_bevel_side_wood",
-};
-
-function getPatternUrlsFromDom() {
-  function mustGet(id) {
-    const img = document.getElementById(id);
-    if (!img) throw new Error(`Missing <img id="${id}"> on page (pattern preload).`);
-    const url = img.currentSrc || img.src;
-    if (!url) throw new Error(`Image "${id}" has no resolved URL yet.`);
-    return url;
-  }
+function buildPatternUrls() {
+  var base = window.TILE_BASE_URL;
+  if (!base) throw new Error("window.TILE_BASE_URL is not set.");
   return {
-    rail: mustGet(PATTERN_IMG_IDS.rail),
-    stile: mustGet(PATTERN_IMG_IDS.stile),
-    bevelTop: mustGet(PATTERN_IMG_IDS.bevelTop),
-    bevelBottom: mustGet(PATTERN_IMG_IDS.bevelBottom),
-    bevelSide: mustGet(PATTERN_IMG_IDS.bevelSide),
-    glass: mustGet(PATTERN_IMG_IDS.glass),
-    extRail: mustGet(PATTERN_IMG_IDS.extRail),
-    extStile: mustGet(PATTERN_IMG_IDS.extStile),
-    extBevelTop: mustGet(PATTERN_IMG_IDS.extBevelTop),
-    extBevelBottom: mustGet(PATTERN_IMG_IDS.extBevelBottom),
-    extBevelSide: mustGet(PATTERN_IMG_IDS.extBevelSide),
+    rail:          base + "interior_base_LR.png",
+    stile:         base + "interior_base_TB.png",
+    bevelTop:      base + "interior_dark_LR.png",
+    bevelBottom:   base + "interior_light_LR.png",
+    bevelSide:     base + "interior_medium_TB.png",
+    glass:         base + "glass-square.png",
+    extRail:       base + "exterior_base_LR.png",
+    extStile:      base + "exterior_base_TB.png",
+    extBevelTop:   base + "exterior_dark_LR.png",
+    extBevelBottom:base + "exterior_light_LR.png",
+    extBevelSide:  base + "exterior_medium_TB.png",
   };
-}
-
-function waitForPatternImages() {
-  const ids = Object.values(PATTERN_IMG_IDS);
-  const imgs = ids.map((id) => document.getElementById(id));
-  if (imgs.some((x) => !x)) {
-    const missing = ids.filter((id) => !document.getElementById(id));
-    throw new Error(`Missing pattern preload <img> ids: ${missing.join(", ")}`);
-  }
-
-  const ready = () => imgs.every((img) => img.complete && (img.currentSrc || img.src));
-  if (ready()) return Promise.resolve();
-
-  return new Promise((resolve, reject) => {
-    let remaining = imgs.length;
-    function doneOne() {
-      remaining--;
-      if (remaining <= 0) resolve();
-    }
-    imgs.forEach((img) => {
-      if (img.complete) return doneOne();
-      img.addEventListener("load", doneOne, { once: true });
-      img.addEventListener("error", () => reject(new Error("A pattern image failed to load.")), { once: true });
-    });
-  });
 }
 // ---------------------------------------------
 
@@ -1047,6 +998,58 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
  * build_block_svgs(index)
  */
 window.build_block_svgs = function build_block_svgs(index, muntins) {
+  // --- Beta mode: single solution, no muntins, no caching ---
+  if (window.comboSolution && typeof window.comboSolution === "object") {
+    var betaSolution = window.comboSolution;
+    var betaObjects = mustBeArray(betaSolution.build_objects, "comboSolution.build_objects");
+    if (betaObjects.length === 0) throw new Error("comboSolution.build_objects is empty.");
+
+    var betaPatternUrls = buildPatternUrls();
+    if (betaSolution.location === "exterior") {
+      betaPatternUrls.rail = betaPatternUrls.extRail;
+      betaPatternUrls.stile = betaPatternUrls.extStile;
+      betaPatternUrls.bevelTop = betaPatternUrls.extBevelTop;
+      betaPatternUrls.bevelBottom = betaPatternUrls.extBevelBottom;
+      betaPatternUrls.bevelSide = betaPatternUrls.extBevelSide;
+    }
+
+    var betaHwHex = "#D7D7D7";
+    var betaHwName = betaSolution.hardware_color;
+    if (betaHwName && window.HARDWARE_COLORS && Array.isArray(window.HARDWARE_COLORS)) {
+      for (var bhi = 0; bhi < window.HARDWARE_COLORS.length; bhi++) {
+        if (window.HARDWARE_COLORS[bhi].name === betaHwName) { betaHwHex = window.HARDWARE_COLORS[bhi].color; break; }
+      }
+    }
+
+    betaSolution.building_block_svgs = {};
+
+    for (var bi = 0; bi < betaObjects.length; bi++) {
+      var betaBlock = betaObjects[bi];
+      if (!betaBlock || typeof betaBlock !== "object") continue;
+      var betaPos = mustStr(betaBlock.block_pos, "build_objects[].block_pos");
+
+      if (String(betaBlock.construction || "").trim() === "head_detail") {
+        var bhdW = Number(betaBlock.width) * PX_PER_INCH;
+        var bhdH = Number(betaBlock.height) * PX_PER_INCH;
+        var bhdSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + bhdW + ' ' + bhdH + '"'
+          + ' width="' + (bhdW * DISPLAY_SCALE) + '" height="' + (bhdH * DISPLAY_SCALE) + '">'
+          + '<rect x="0" y="0" width="' + bhdW + '" height="' + bhdH + '"'
+          + ' fill="white" stroke="#333333" stroke-width="2" vector-effect="non-scaling-stroke"/>'
+          + '</svg>';
+        betaSolution.building_block_svgs[betaPos] = bhdSvg;
+        continue;
+      }
+
+      // Beta: rows/cols are pre-resolved, use as-is (shallow copy to avoid mutation)
+      var betaRenderBlock = Object.assign({}, betaBlock);
+      var betaSvgStr = renderOneBlockToSvgString(betaRenderBlock, betaPatternUrls, betaHwHex);
+      betaSolution.building_block_svgs[betaPos] = betaSvgStr;
+    }
+
+    return betaSolution.building_block_svgs;
+  }
+  // --- End Beta mode ---
+
   if (!window.comboSolutions || !Array.isArray(window.comboSolutions)) {
     throw new Error("window.comboSolutions is missing or not an array.");
   }
@@ -1068,7 +1071,7 @@ window.build_block_svgs = function build_block_svgs(index, muntins) {
     return solution[cacheKey]; // already rendered
   }
 
-  const patternUrls = getPatternUrlsFromDom();
+  const patternUrls = buildPatternUrls();
 
   // Swap in exterior wood tiles when location is "exterior" (glass stays the same)
   if (solution.location === "exterior") {
