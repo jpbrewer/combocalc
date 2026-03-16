@@ -115,8 +115,10 @@
  *     updateBoreVisibility(boreSide, container)
  *       - boreSide ("left_hand"|"right_hand"|"none"): sets display on bore groups in the mounted SVG.
  *       - Single-door: shows matching [data-bore] group ("left"/"right"), hides the other.
- *       - Double-door: shows [data-bore-slab] on the OPPOSITE slab from operating_door
+ *       - Double-door bore: shows [data-bore-slab] on the OPPOSITE slab from operating_door
  *         (e.g., "left_hand" → show right slab bore, hide left). "none" hides both.
+ *       - Double-door bolts: shows [data-bolt-slab] on the SAME slab as operating_door. "none" hides both.
+ *       - Double-door catches: shows both [data-catch] only when operating_door="none"; hidden otherwise.
  *       - container (optional HTMLElement): defaults to last mount target or #explore.
  *       - Called automatically after every mount (cached or fresh) using solution.operating_door || "right_hand".
  *       - Also called by calc-modal.js door bore toggle for instant DOM-only switching.
@@ -129,7 +131,7 @@
  *       - Called automatically after every mount and by bore toggle for instant DOM switching.
  *
  *     updateHingeColor(hexColor, container)
- *       - hexColor (string): CSS hex color to apply to all hinge rect fills.
+ *       - hexColor (string): CSS hex color to apply to all hinge, bolt, and catch rect fills.
  *       - container (optional HTMLElement): defaults to last mount target or #explore.
  *       - Called automatically after every mount and by hardware color selector change handler.
  *

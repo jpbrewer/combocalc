@@ -5,9 +5,12 @@
  * UI CONTROLLER
  *
  * Purpose:
- *  Controls the Explore modal overlay: opening/closing, muntin toggle, door bore toggle,
+ *  Controls the Explore modal overlay: opening/closing, muntin toggle, door bore toggle
+ *  (single door: left/right; double door: left/right/none with bore, bolt, and catch visibility),
  *  hardware color selector, double-door wrapper, modal data grid population, modal icon,
  *  and Configure button (stages solution, reconciles muntins, POSTs to Xano).
+ *  For double doors, defaults operating_door to "none" on first open; toggles
+ *  #double-door-note / #double-door-note-dummy visibility based on selection.
  *  Separated from calc-combo-results.js so the SVG rendering pipeline can be reused
  *  on other pages without requiring modal infrastructure.
  *
@@ -27,6 +30,11 @@
  *    - #hardware-color-wrapper   (hardware color wrapper; display toggled)
  *    - #hardware-selector        (container for dynamically created <select>)
  *    - #dbl-door-wrapper         (double door wrapper; display toggled)
+ *    - #door-bore-left-double   (double door left bore toggle; class-toggled)
+ *    - #door-bore-right-double  (double door right bore toggle; class-toggled)
+ *    - #double_door_no_bore     (double door no-bore toggle; class-toggled; default active)
+ *    - #double-door-note        (shown when operating_door is left_hand or right_hand)
+ *    - #double-door-note-dummy  (shown when operating_door is none)
  *  - Selectors / structural assumptions:
  *    - [data-solution-explore="btn"]  (Explore buttons on solution cards; click captured at document level)
  *    - [data-modal-summary="section"] (opening summary block; contains data-field opening_width/opening_height/jamb_depth)

@@ -140,6 +140,16 @@
  *    one per slab, on the meeting stile (center edge). After -90° rotation: leaf1=left slab, leaf2=right slab.
  *    Bore goes on the OPPOSITE slab from operating_door (e.g., operating_door="left_hand" → bore on right slab).
  *    Visibility is controlled post-mount by window.updateBoreVisibility().
+ *  - Double-door slide bolts (<g data-bolt-slab="left"> and <g data-bolt-slab="right">):
+ *    - One per slab at the top of the door (inside the sash boundary), near the meeting stile.
+ *    - Same dimensions and styling as a single hinge rect (3.5" x 0.5"). Hardware color-matched.
+ *    - Bolt shows on the SAME slab as operating_door (the swinging door). Hidden when "none".
+ *    - Visibility controlled post-mount by window.updateBoreVisibility().
+ *  - Double-door ball catches (<g data-catch="left"> and <g data-catch="right">):
+ *    - One per slab in the head jamb above the door, near the meeting stile.
+ *    - Half the size of a hinge (1.75" x 0.25"). Hardware color-matched.
+ *    - Both shown only when operating_door="none". Hidden when left_hand or right_hand.
+ *    - Visibility controlled post-mount by window.updateBoreVisibility().
  *  - Door hinge rendering (single_door and double_door):
  *    - Two groups per leaf: <g data-hinge="left"> and <g data-hinge="right"> (leaf2 uses data-hinge-leaf2).
  *    - Each group contains 3 filled rects (0.5" wide x 3.5" tall) at 7", 38", 69" from door bottom.

@@ -252,6 +252,11 @@ Removing fixed height from `#explore` will break layout scaling.
 | `hardware-color-wrapper` | `div` | Hardware color selector wrapper; normally hidden; shown (display:flex) when solution has any door | `calc-modal.js` | Hardware selector not shown; hinges use Chrome default |
 | `hardware-selector` | `div`   | Container into which a `<select>` is dynamically created from `HARDWARE_COLORS` (styles hardcoded in JS; no template element needed) | `calc-modal.js` | No select rendered; hinges use Chrome default |
 | `dbl-door-wrapper` | `div`   | Double door info wrapper; normally hidden; shown (display:flex) only when solution has double_door construction; hidden on modal close | `calc-modal.js` | Wrapper not shown; no impact on functionality |
+| `door-bore-left-double` | clickable element | Inside `#dbl-door-wrapper`; sets `operating_door` to `"left_hand"` on click; receives `.door-selection-active` class when active | `calc-modal.js` | Toggle not wired; operating_door stays at default |
+| `door-bore-right-double` | clickable element | Inside `#dbl-door-wrapper`; sets `operating_door` to `"right_hand"` on click; receives `.door-selection-active` class when active | `calc-modal.js` | Toggle not wired; operating_door stays at default |
+| `double_door_no_bore` | clickable element | Inside `#dbl-door-wrapper`; sets `operating_door` to `"none"` on click; receives `.door-selection-active` class when active; default for double doors | `calc-modal.js` | Toggle not wired; operating_door stays at default |
+| `double-door-note` | element | Inside `#dbl-door-wrapper`; shown (display:block) when `operating_door` is `"left_hand"` or `"right_hand"`; hidden when `"none"` | `calc-modal.js` | Note not shown; no impact on functionality |
+| `double-door-note-dummy` | element | Inside `#dbl-door-wrapper`; shown (display:block) when `operating_door` is `"none"`; hidden when `"left_hand"` or `"right_hand"` | `calc-modal.js` | Note not shown; no impact on functionality |
 
 ## Modal data grid elements (inside `#modal-panel`, after `#explore`)
 
