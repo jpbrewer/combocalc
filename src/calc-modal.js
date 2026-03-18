@@ -615,12 +615,26 @@
       }
     }
 
-    // 5. POST to Xano
+    // 5. Open tab synchronously (before await) to avoid popup blocker, then POST
+    var configTab = window.open("about:blank", "_blank");
+
     try {
       var result = await postJson(CONFIGURE_ENDPOINT, staged);
       console.log("[calc-modal] Configure POST succeeded:", result);
+
+      // Save locator_id to live solution and navigate the pre-opened tab
+      if (result) {
+        solution.locator_id = result;
+        var configUrl = (window.CONFIGURATOR_BASE_URL || "https://localhost:3001/combo/") + result;
+        if (configTab) configTab.location.href = configUrl;
+      } else {
+        // No locator_id in response — close the blank tab
+        if (configTab) configTab.close();
+      }
     } catch (err) {
       console.error("[calc-modal] Configure POST failed:", err);
+      // Close the blank tab on failure
+      if (configTab) configTab.close();
     }
   }
 

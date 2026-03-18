@@ -91,6 +91,7 @@
   // Update these when moving assets to a production web server.
   window.TILE_BASE_URL = "https://localhost:3001/assets/tiles/";
   window.ICON_BASE_URL = "https://localhost:3001/assets/icons/";
+  window.CONFIGURATOR_BASE_URL = "https://localhost:3001/combo/";
 
   /**
    * IMPORTANT:
