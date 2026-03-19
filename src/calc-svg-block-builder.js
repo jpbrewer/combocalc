@@ -814,9 +814,9 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
     var HINGE_TALL_PX = 3.5 * PX_PER_INCH;   // 336px along x (pre-rot)
     var HINGE_WIDE_PX = 0.5 * PX_PER_INCH;    // 48px along y (pre-rot)
     var HINGE_OFFSETS = [
-      7 * PX_PER_INCH,    // 672px — 7" from bottom
-      38 * PX_PER_INCH,   // 3648px — 38" from bottom
-      69 * PX_PER_INCH    // 6624px — 69" from bottom
+      (7 / 80) * LEAF_WIDTH,    // 7/80 of door height from bottom
+      (38 / 80) * LEAF_WIDTH,   // 38/80 of door height from bottom
+      (69 / 80) * LEAF_WIDTH    // 69/80 of door height from bottom
     ];
     var hingeFill = hardwareHex || "#D7D7D7";
 
