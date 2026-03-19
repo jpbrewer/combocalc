@@ -726,16 +726,6 @@
     var notesRow = gridBlock.querySelector(MODAL_NOTES_SELECTOR);
     var grid = sol.solution_grid || {};
 
-    // --- Unit Notes (above bottom notes row) ---
-    var unitNotesValue = grid.unit_notes != null ? grid.unit_notes : "";
-    if (unitNotesValue.trim() && notesRow) {
-      var unitNotesClone = notesRow.cloneNode(true);
-      unitNotesClone.setAttribute("data-unit-notes", "row");
-      unitNotesClone.removeAttribute("data-modal-notes");
-      setField(unitNotesClone, "notes", unitNotesValue);
-      if (rowContainer && notesRow) rowContainer.insertBefore(unitNotesClone, notesRow);
-    }
-
     POS_ORDER.forEach(function (posKey) {
       var rowData = grid[posKey];
       if (!rowData) return;
@@ -760,6 +750,16 @@
         rowContainer.appendChild(row);
       }
     });
+
+    // --- Unit Notes (above solution notes row) ---
+    var unitNotesValue = grid.unit_notes != null ? grid.unit_notes : "";
+    if (unitNotesValue.trim() && notesRow) {
+      var unitNotesClone = notesRow.cloneNode(true);
+      unitNotesClone.setAttribute("data-unit-notes", "row");
+      unitNotesClone.removeAttribute("data-modal-notes");
+      setField(unitNotesClone, "notes", unitNotesValue);
+      if (rowContainer && notesRow) rowContainer.insertBefore(unitNotesClone, notesRow);
+    }
 
     // --- Notes ---
     if (notesRow) {
