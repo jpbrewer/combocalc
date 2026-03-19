@@ -262,7 +262,7 @@ Removing fixed height from `#explore` will break layout scaling.
 
 | Selector                              | Element Type | Purpose                                                     | Controlled By           | Failure Behavior if Missing            |
 |---------------------------------------|--------------|-------------------------------------------------------------|-------------------------|----------------------------------------|
-| `[data-modal-summary="section"]`      | `div`        | Opening summary block (width, height, jamb depth)           | `calc-modal.js` | Summary silently not shown             |
+| `[data-modal-summary="section"]`      | `div`        | Opening summary block (width, height, jamb depth, location, starting point) | `calc-modal.js` | Summary silently not shown             |
 | `[data-modal-grid="section"]`         | `div`        | Solution grid container (icon, rows, notes, configure btn)  | `calc-modal.js` | Grid silently not shown                |
 | `[data-modal-icon="img"]`             | `div`        | Icon wrapper; must contain `<img data-field="icon">`        | `calc-modal.js` | Icon silently not shown                |
 | `[data-modal-row="template"]`         | `div`        | Row template; cloned per position key; hidden when template | `calc-modal.js` | Grid rows not rendered                 |
@@ -484,7 +484,7 @@ Full list of `data-*` attributes used by JS as selectors or data carriers:
 | `data-solution-explore`     | `"btn"`                   | `calc-combo-results.js`   | Receives `data-solution-index` on clone wiring                  |
 | `data-solution-icon`        | `"img"`                   | `calc-combo-results.js`   | Wrapper element; must contain `<img data-field="icon">`         |
 | `data-solution-index`       | numeric string (0-based)  | `calc-combo-results.js`   | Written by JS; read on Explore click to index `window.comboSolutions` |
-| `data-field`                | see Rendering Targets §8  | `calc-combo-results.js`   | `icon`, `row`, `building_block`, `order_dims`, `quantity`, `line_notes`, `summary`; modal also uses `notes`, `opening_width`, `opening_height`, `jamb_depth` |
+| `data-field`                | see Rendering Targets §8  | `calc-combo-results.js`   | `icon`, `row`, `building_block`, `order_dims`, `quantity`, `line_notes`, `summary`; modal also uses `notes`, `opening_width`, `opening_height`, `jamb_depth`, `location`, `starting_point` |
 | `data-modal-summary`        | `"section"`               | `calc-modal.js`           | Opening summary block inside modal                          |
 | `data-modal-grid`           | `"section"`               | `calc-modal.js`           | Solution grid wrapper inside modal                          |
 | `data-modal-icon`           | `"img"`                   | `calc-modal.js`           | Icon wrapper; must contain `<img data-field="icon">`        |
@@ -581,7 +581,7 @@ High risk breakage areas:
 -   Renaming `data-solution-card`, `data-solution-row`, `data-solution-summary`, `data-solution-explore`, `data-solution-icon` attributes
 -   Renaming `data-modal-summary`, `data-modal-grid`, `data-modal-icon`, `data-modal-row`, `data-modal-notes`, `data-modal-configure` attributes — breaks modal grid population
 -   Removing modal grid template elements degrades gracefully (no crash) but modal data will not display
--   Renaming any `data-field` value (`icon`, `row`, `building_block`, `order_dims`, `quantity`, `line_notes`, `summary`, `notes`, `opening_width`, `opening_height`, `jamb_depth`)
+-   Renaming any `data-field` value (`icon`, `row`, `building_block`, `order_dims`, `quantity`, `line_notes`, `summary`, `notes`, `opening_width`, `opening_height`, `jamb_depth`, `location`, `starting_point`)
 -   Removing or renaming `.solutions-list` CSS class — breaks card list container lookup
 -   Webflow Interactions (`data-w-id`) being re-added to cloned cards — JS strips these; if Webflow re-attaches to originals after publish, clones may inherit them before strip runs
 -   Adding a form action attribute to `#wf_form_combo` — JS removes Webflow form attributes at init, but a native action could fire before JS intercepts on slow connections

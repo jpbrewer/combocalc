@@ -37,7 +37,7 @@
  *    - #double-door-note-dummy  (shown when operating_door is none)
  *  - Selectors / structural assumptions:
  *    - [data-solution-explore="btn"]  (Explore buttons on solution cards; click captured at document level)
- *    - [data-modal-summary="section"] (opening summary block; contains data-field opening_width/opening_height/jamb_depth)
+ *    - [data-modal-summary="section"] (opening summary block; contains data-field opening_width/opening_height/jamb_depth/location/starting_point)
  *    - [data-modal-grid="section"]    (grid block containing row template + notes row + icon)
  *    - [data-modal-row="template"]    (template row for solution_grid positions to clone)
  *    - [data-modal-notes="row"]       (notes row template; cloned for unit_notes, original for solution_notes)
@@ -695,6 +695,16 @@
       setField(summaryBlock, "opening_width",  decimalToFraction(sol.opening_width));
       setField(summaryBlock, "opening_height", decimalToFraction(sol.opening_height));
       setField(summaryBlock, "jamb_depth",     decimalToFraction(sol.jamb_depth));
+
+      setField(summaryBlock, "location", sol.location || "");
+
+      var SP_LABELS = {
+        rough_opening:     "Rough Opening",
+        new_opening:       "New Opening",
+        drywalled_opening: "Drywalled Opening",
+        cased_opening:     "Cased Opening"
+      };
+      setField(summaryBlock, "starting_point", SP_LABELS[sol.starting_point] || sol.starting_point || "");
     }
 
     // --- Solution Grid ---

@@ -68,6 +68,7 @@
  *      - opening_width (number), opening_height (number), jamb_depth (number)
  *      - unit_width (number), unit_height (number) — decimal inches for dimension annotations
  *      - location (string): "interior" or "exterior" — determines wood tile set for SVG rendering
+ *      - starting_point (string): e.g. "rough_opening", "new_opening", "drywalled_opening", "cased_opening"
  *    - Each solution object may contain:
  *      - assembly_template (string)
  *      - assembly_no or arrangement_no (number/string)
@@ -83,6 +84,7 @@
  *      - opening_width, opening_height, jamb_depth (optional; per-solution override of root values)
  *      - unit_width, unit_height (optional; decimal inches; used for SVG dimension annotations)
  *      - location ("interior" | "exterior" | null; per-solution override of root; determines wood tile set)
+ *      - starting_point (string | null; per-solution override of root; e.g. "rough_opening")
  *      - operating_door ("left_hand" | "right_hand" | "none"; which stile gets the bore hole; defaults per assembly template's operating_door value)
  *      - hardware_color (string; hardware color name e.g. "Chrome"; provided by backend with default)
  *  - Required external function (called on Explore click):
@@ -128,7 +130,7 @@
  *
  *  Data Produced:
  *  - Normalized solution objects stored in window.comboSolutions:
- *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta, opening_width, opening_height, jamb_depth, location, operating_door }
+ *    - { index, job_id, assembly_template, assembly_no, icon, solution_grid, build_object_specs, solution_svg, meta, opening_width, opening_height, jamb_depth, location, starting_point, operating_door }
  *
  * Load Order / Dependencies:
  *  - Must run after the Webflow page DOM exists (uses DOMContentLoaded).
@@ -511,9 +513,10 @@
           unit_width:     resp.unit_width     ?? null,
           unit_height:    resp.unit_height    ?? null,
           location:       resp.location       ?? null,
+          starting_point: resp.starting_point ?? null,
         }
       : { opening_width: null, opening_height: null, jamb_depth: null,
-          unit_width: null, unit_height: null, location: null };
+          unit_width: null, unit_height: null, location: null, starting_point: null };
 
     return arr.map((sol, idx) => ({
       index: idx,
@@ -531,17 +534,20 @@
 
       meta: sol.meta ?? {},
 
-      // Opening dimensions (per-solution overrides root)
-      opening_width:  sol.opening_width  ?? rootOpening.opening_width,
-      opening_height: sol.opening_height ?? rootOpening.opening_height,
-      jamb_depth:     sol.jamb_depth     ?? rootOpening.jamb_depth,
+      // Opening dimensions (always from response root)
+      opening_width:  rootOpening.opening_width,
+      opening_height: rootOpening.opening_height,
+      jamb_depth:     rootOpening.jamb_depth,
 
-      // Unit dimensions for SVG dimension annotations
-      unit_width:     sol.unit_width     ?? rootOpening.unit_width,
-      unit_height:    sol.unit_height    ?? rootOpening.unit_height,
+      // Unit dimensions for SVG dimension annotations (per-solution overrides root)
+      unit_width:     sol.unit_width  ?? rootOpening.unit_width,
+      unit_height:    sol.unit_height ?? rootOpening.unit_height,
 
-      // Location ("interior" | "exterior") — determines wood tile set
-      location:       sol.location       ?? rootOpening.location,
+      // Location ("interior" | "exterior") — always from response root
+      location:       rootOpening.location,
+
+      // Starting point (e.g. "rough_opening", "new_opening", "drywalled_opening", "cased_opening") — always from response root
+      starting_point: rootOpening.starting_point,
 
       // Operating door side ("left_hand" | "right_hand" | "none")
       operating_door: sol.operating_door ?? "none",
