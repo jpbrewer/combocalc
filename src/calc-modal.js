@@ -154,6 +154,14 @@
   }
 
   function closeModal() {
+    // Reset hardware color select and solution data before closing
+    if (currentModalIndex !== null) {
+      var solution = window.comboSolutions[currentModalIndex];
+      if (solution) solution.hardware_color = "Chrome";
+    }
+    var hwSelect = document.getElementById("hardware-color-select");
+    if (hwSelect) hwSelect.value = "Chrome";
+
     var dblWrapper = document.getElementById(DBL_DOOR_WRAPPER_ID);
     if (dblWrapper) dblWrapper.style.display = "none";
     var overlay = document.getElementById(MODAL_OVERLAY_ID);
