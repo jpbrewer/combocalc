@@ -549,6 +549,10 @@
       // Starting point (e.g. "rough_opening", "new_opening", "drywalled_opening", "cased_opening") — always from response root
       starting_point: rootOpening.starting_point,
 
+      // Gap dimensions (per-solution)
+      top_gap:  sol.top_gap  ?? null,
+      side_gap: sol.side_gap ?? null,
+
       // Operating door side ("left_hand" | "right_hand" | "none")
       operating_door: sol.operating_door ?? "none",
 

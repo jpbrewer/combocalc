@@ -150,9 +150,13 @@
  * - Replaces the contents of the mount target (default div#explore):
  *     - Removes all existing children.
  *     - Appends one inline <svg> element containing translated <g data-pos="posX"> groups.
- *     - If unit_width/unit_height are present, a <g data-role="dimensions"> group is
+ *     - If unit_width/unit_height are present, a <g data-role="combo_unit_dims_only"> group is
  *       appended with arrowed dimension lines and fractional-inch text labels.
- *       The viewBox is expanded to accommodate the annotations.
+ *     - A second <g data-role="building_block_dims"> group is also appended with
+ *       shifted-out combo unit dimension lines plus per-block dimension lines
+ *       (labels show sash dimension + 1.5" for jamb). Visibility is toggled by
+ *       window.showBlockDims (true = show block dims, hide combo-only; false/absent = opposite).
+ *       The viewBox is expanded to accommodate whichever set of annotations is larger.
  *
  * - Wrapper inline styles may be set only if currently unset (as implemented):
  *     explore.style.position = "relative"
@@ -620,11 +624,31 @@ function build_assembly_svg(index, muntins, mountTarget) {
       root, bounds, solution.unit_width, solution.unit_height, arrowHeight, hdPlacement
     );
 
-    // 8d) Set viewBox expanded by dimension margins
-    var vbX = bounds.minX - dimMargins.leftMargin;
-    var vbY = bounds.minY - dimMargins.topMargin;
-    var vbW = bounds.w + dimMargins.leftMargin + dimMargins.rightMargin;
-    var vbH = bounds.h + dimMargins.topMargin;
+    // 8c2) Append block-level dimension annotations
+    var blockDimMargins = appendBlockDimensionAnnotations(
+      root, bounds, solution.unit_width, solution.unit_height, arrowHeight, hdPlacement, placements, solution
+    );
+
+    // 8c3) Toggle visibility based on window.showBlockDims
+    var comboGroup = root.querySelector('[data-role="combo_unit_dims_only"]');
+    var blockGroup = root.querySelector('[data-role="building_block_dims"]');
+    if (window.showBlockDims === true) {
+      if (comboGroup) comboGroup.style.display = "none";
+      if (blockGroup) blockGroup.style.display = "";
+    } else {
+      if (comboGroup) comboGroup.style.display = "";
+      if (blockGroup) blockGroup.style.display = "none";
+    }
+
+    // 8d) Set viewBox expanded by max of both margin sets
+    var topM = Math.max(dimMargins.topMargin, blockDimMargins.topMargin);
+    var leftM = Math.max(dimMargins.leftMargin, blockDimMargins.leftMargin);
+    var rightM = Math.max(dimMargins.rightMargin, blockDimMargins.rightMargin);
+    var bottomM = blockDimMargins.bottomMargin || 0;
+    var vbX = bounds.minX - leftM;
+    var vbY = bounds.minY - topM;
+    var vbW = bounds.w + leftM + rightM;
+    var vbH = bounds.h + topM + bottomM;
     root.setAttribute("viewBox", vbX + " " + vbY + " " + vbW + " " + vbH);
 
     // ✅ CONSTRAIN TO WRAPPER DIV
@@ -863,7 +887,7 @@ function appendDimensionAnnotations(root, bounds, widthIn, heightIn, arrowHeight
 
   var color = "#333333";
   var g = document.createElementNS(SVG_NS, "g");
-  g.setAttribute("data-role", "dimensions");
+  g.setAttribute("data-role", "combo_unit_dims_only");
 
   // --- Width dimension (horizontal line above drawing) ---
   if (widthIn) {
@@ -952,5 +976,256 @@ function appendDimensionAnnotations(root, bounds, widthIn, heightIn, arrowHeight
     topMargin:  widthIn  ? topMargin  : 0,
     leftMargin: heightIn ? leftMargin : 0,
     rightMargin: rightMargin
+  };
+}
+
+
+/* ---------- BLOCK DIMENSION ANNOTATION HELPERS ---------- */
+
+/**
+ * Returns true if the given block_pos is a head_detail in the solution's build_objects.
+ */
+function isHeadDetail(solution, posKey) {
+  if (!Array.isArray(solution.build_objects)) return false;
+  for (var i = 0; i < solution.build_objects.length; i++) {
+    var bo = solution.build_objects[i];
+    if (bo && bo.block_pos === posKey && String(bo.construction || "").trim() === "head_detail") {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Draws a horizontal arrowed dimension line with label.
+ * @param {SVGGElement} g       - Parent group
+ * @param {number}      x1      - Left endpoint
+ * @param {number}      x2      - Right endpoint
+ * @param {number}      y       - Y position of line
+ * @param {string}      label   - Text label
+ * @param {number}      strokeW - Stroke width
+ * @param {number}      arrowLen- Arrowhead length
+ * @param {number}      fontSize- Font size
+ * @param {number}      textPad - Text padding
+ * @param {string}      color   - Stroke/fill color
+ */
+function drawHorizDimLine(g, x1, x2, y, label, strokeW, arrowLen, fontSize, textPad, color) {
+  dimLine(g, x1, y, x2, y, strokeW, color);
+  // Left arrowhead
+  dimLine(g, x1, y, x1 + arrowLen, y - arrowLen, strokeW, color);
+  dimLine(g, x1, y, x1 + arrowLen, y + arrowLen, strokeW, color);
+  // Right arrowhead
+  dimLine(g, x2, y, x2 - arrowLen, y - arrowLen, strokeW, color);
+  dimLine(g, x2, y, x2 - arrowLen, y + arrowLen, strokeW, color);
+  // Label centered above
+  dimText(g, (x1 + x2) / 2, y - textPad, label, fontSize, color);
+}
+
+/**
+ * Draws a vertical arrowed dimension line with rotated label.
+ * @param {SVGGElement} g        - Parent group
+ * @param {number}      x        - X position of line
+ * @param {number}      y1       - Top endpoint
+ * @param {number}      y2       - Bottom endpoint
+ * @param {string}      label    - Text label
+ * @param {number}      strokeW  - Stroke width
+ * @param {number}      arrowLen - Arrowhead length
+ * @param {number}      fontSize - Font size
+ * @param {number}      hTextPad - Text padding for rotated label
+ * @param {string}      color    - Stroke/fill color
+ */
+function drawVertDimLine(g, x, y1, y2, label, strokeW, arrowLen, fontSize, hTextPad, color) {
+  dimLine(g, x, y1, x, y2, strokeW, color);
+  // Top arrowhead
+  dimLine(g, x, y1, x - arrowLen, y1 + arrowLen, strokeW, color);
+  dimLine(g, x, y1, x + arrowLen, y1 + arrowLen, strokeW, color);
+  // Bottom arrowhead
+  dimLine(g, x, y2, x - arrowLen, y2 - arrowLen, strokeW, color);
+  dimLine(g, x, y2, x + arrowLen, y2 - arrowLen, strokeW, color);
+  // Label centered, rotated -90deg
+  dimTextRotated(g, x - hTextPad, (y1 + y2) / 2, label, fontSize, color);
+}
+
+/**
+ * Appends building-block-level dimension annotations to the assembled SVG.
+ * Contains duplicated (shifted-out) combo unit lines plus per-block dimension lines.
+ *
+ * @param {SVGElement}  root        - The assembled <svg> element
+ * @param {Object}      bounds      - { minX, minY, w, h }
+ * @param {number|null} widthIn     - Unit width in decimal inches
+ * @param {number|null} heightIn    - Unit height in decimal inches
+ * @param {number}      arrowHeight - Height arrow span in SVG units
+ * @param {Object|null} hdPlacement - Head detail placement or null
+ * @param {Object}      placements  - { posKey: {x, y, w, h, svgEl} }
+ * @param {Object}      solution    - The solution object (for build_objects)
+ * @returns {{ topMargin, leftMargin, rightMargin, bottomMargin }}
+ */
+function appendBlockDimensionAnnotations(root, bounds, widthIn, heightIn, arrowHeight, hdPlacement, placements, solution) {
+  var BLOCK_PX_PER_INCH = 96;
+
+  var maxDim   = Math.max(bounds.w, bounds.h);
+  var strokeW  = maxDim * 0.003;
+  var arrowLen = maxDim * 0.012;
+  var fontSize = maxDim * 0.028;
+  var gap      = maxDim * 0.036;
+  var textPad  = maxDim * 0.012;
+  var hTextPad = textPad + maxDim * 0.0094;
+
+  var color = "#333333";
+  var g = document.createElementNS(SVG_NS, "g");
+  g.setAttribute("data-role", "building_block_dims");
+
+  // --- Classify positions into rows (excluding head_detail) ---
+  var BOTTOM_KEYS = ["pos1", "pos2", "pos3"];
+  var TOP_KEYS    = ["pos4", "pos5", "pos6"];
+
+  var bottomRow = [];
+  for (var bi = 0; bi < BOTTOM_KEYS.length; bi++) {
+    var bk = BOTTOM_KEYS[bi];
+    if (placements[bk] && !isHeadDetail(solution, bk)) bottomRow.push(bk);
+  }
+
+  var topRow = [];
+  for (var ti = 0; ti < TOP_KEYS.length; ti++) {
+    var tk = TOP_KEYS[ti];
+    if (placements[tk] && !isHeadDetail(solution, tk)) topRow.push(tk);
+  }
+
+  var hasTopRow = topRow.length > 0;
+
+  // --- Check if top and bottom rows have same column count and widths ---
+  var rowsMatch = false;
+  if (hasTopRow && topRow.length === bottomRow.length) {
+    rowsMatch = true;
+    for (var ci = 0; ci < bottomRow.length; ci++) {
+      if (Math.abs(placements[bottomRow[ci]].w - placements[topRow[ci]].w) > 0.01) {
+        rowsMatch = false;
+        break;
+      }
+    }
+  }
+
+  // --- Margin tracking ---
+  var topMargin = 0;
+  var leftMargin = 0;
+  var rightMargin = 0;
+  var bottomMargin = 0;
+
+  // --- 1a. Outer combo unit lines ---
+  var outerGapH = gap * 2.5;  // horizontal width line shifted further out
+  var outerGapV = hasTopRow ? gap * 2.5 : gap;  // vertical height line shifted only if top row exists
+
+  if (widthIn) {
+    var wLineY = bounds.minY - outerGapH;
+    drawHorizDimLine(g, bounds.minX, bounds.minX + bounds.w, wLineY,
+      dimToFraction(widthIn), strokeW, arrowLen, fontSize, textPad, color);
+    topMargin = outerGapH + strokeW + textPad + fontSize * 1.2;
+  }
+
+  if (heightIn) {
+    var hLineX = bounds.minX - outerGapV;
+    var hY2 = bounds.minY + bounds.h;
+    var hY1 = hY2 - arrowHeight;
+    drawVertDimLine(g, hLineX, hY1, hY2,
+      dimToFraction(heightIn), strokeW, arrowLen, fontSize, hTextPad, color);
+    leftMargin = outerGapV + strokeW + hTextPad + fontSize * 3;
+  }
+
+  // Head detail label (same as original)
+  if (hdPlacement) {
+    var hdCenterY = hdPlacement.y + hdPlacement.h / 2;
+    var hdRightX  = bounds.minX + bounds.w;
+    var arrowStartX = hdRightX + gap;
+    var hdArrowLen  = maxDim * 0.04;
+    var arrowEndX   = arrowStartX + hdArrowLen;
+
+    dimLine(g, arrowStartX, hdCenterY, arrowEndX, hdCenterY, strokeW, color);
+    dimLine(g, arrowStartX, hdCenterY, arrowStartX + arrowLen, hdCenterY - arrowLen, strokeW, color);
+    dimLine(g, arrowStartX, hdCenterY, arrowStartX + arrowLen, hdCenterY + arrowLen, strokeW, color);
+
+    var hdLabelX = arrowEndX + textPad;
+    var hdLabel = document.createElementNS(SVG_NS, "text");
+    hdLabel.setAttribute("x", hdLabelX);
+    hdLabel.setAttribute("y", hdCenterY);
+    hdLabel.setAttribute("text-anchor", "start");
+    hdLabel.setAttribute("dominant-baseline", "central");
+    hdLabel.setAttribute("font-family", "system-ui, -apple-system, sans-serif");
+    hdLabel.setAttribute("font-size", fontSize);
+    hdLabel.setAttribute("fill", color);
+    hdLabel.textContent = "Head Detail";
+    g.appendChild(hdLabel);
+
+    rightMargin = gap + hdArrowLen + textPad + fontSize * 7;
+  }
+
+  // --- 1c. Horizontal block dimension lines (at original gap) ---
+  var blockLineYAbove = bounds.minY - gap;
+  var blockLineYBelow = bounds.minY + bounds.h + gap;
+
+  // Determine which rows get lines above vs below
+  var aboveRow = bottomRow;  // default: bottom row dims drawn above
+  var belowRow = null;
+
+  if (hasTopRow && !rowsMatch) {
+    aboveRow = topRow;       // top row dims above
+    belowRow = bottomRow;    // bottom row dims below
+  } else if (hasTopRow && rowsMatch) {
+    aboveRow = bottomRow;    // same dims, just draw one set above
+  }
+
+  // Draw above-drawing block width lines
+  for (var ai = 0; ai < aboveRow.length; ai++) {
+    var ap = placements[aboveRow[ai]];
+    var aInches = ap.w / BLOCK_PX_PER_INCH;
+    drawHorizDimLine(g, ap.x, ap.x + ap.w, blockLineYAbove,
+      dimToFraction(aInches), strokeW, arrowLen, fontSize, textPad, color);
+  }
+  // Ensure top margin accounts for block lines above (if not already larger from outer)
+  var blockTopMargin = gap + strokeW + textPad + fontSize * 1.2;
+  if (blockTopMargin > topMargin) topMargin = blockTopMargin;
+
+  // Draw below-drawing block width lines (only when rows differ)
+  if (belowRow) {
+    for (var bli = 0; bli < belowRow.length; bli++) {
+      var bp = placements[belowRow[bli]];
+      var bInches = bp.w / BLOCK_PX_PER_INCH;
+      drawHorizDimLine(g, bp.x, bp.x + bp.w, blockLineYBelow,
+        dimToFraction(bInches), strokeW, arrowLen, fontSize, textPad, color);
+    }
+    bottomMargin = gap + strokeW + textPad + fontSize * 1.2;
+  }
+
+  // --- 1d. Vertical block dimension lines (at original gap, only when top row exists) ---
+  if (hasTopRow) {
+    var blockLineX = bounds.minX - gap;
+
+    // Bottom row height (use first bottom row block)
+    if (bottomRow.length > 0) {
+      var brp = placements[bottomRow[0]];
+      var brInches = brp.h / BLOCK_PX_PER_INCH;
+      drawVertDimLine(g, blockLineX, brp.y, brp.y + brp.h,
+        dimToFraction(brInches), strokeW, arrowLen, fontSize, hTextPad, color);
+    }
+
+    // Top row height (use first top row block)
+    if (topRow.length > 0) {
+      var trp = placements[topRow[0]];
+      var trInches = trp.h / BLOCK_PX_PER_INCH;
+      drawVertDimLine(g, blockLineX, trp.y, trp.y + trp.h,
+        dimToFraction(trInches), strokeW, arrowLen, fontSize, hTextPad, color);
+    }
+
+    // Ensure left margin accounts for block height lines
+    var blockLeftMargin = gap + strokeW + hTextPad + fontSize * 3;
+    if (blockLeftMargin > leftMargin) leftMargin = blockLeftMargin;
+  }
+
+  root.appendChild(g);
+
+  return {
+    topMargin: topMargin,
+    leftMargin: leftMargin,
+    rightMargin: rightMargin,
+    bottomMargin: bottomMargin
   };
 }
