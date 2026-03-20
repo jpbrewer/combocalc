@@ -644,19 +644,22 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
   const uw = ASSEMBLY_SASH_WIDTH + (JAMB_MARGIN * 2);
   const uh = ASSEMBLY_SASH_HEIGHT + (JAMB_MARGIN * 2);
 
+  // Door-like blocks: side legs (jambTop/jambBottom after rotation) protrude 0.25" past the slab bottom
+  const LEG_EXTENSION = IS_DOORLIKE ? 0.25 * PX_PER_INCH : 0;
+
   unitBoundary.setAttribute("x", String(ux));
   unitBoundary.setAttribute("y", String(uy));
   unitBoundary.setAttribute("width", String(uw));
   unitBoundary.setAttribute("height", String(uh));
 
-  jambTop.setAttribute("x", String(ux));
+  jambTop.setAttribute("x", String(ux - LEG_EXTENSION));
   jambTop.setAttribute("y", String(uy));
-  jambTop.setAttribute("width", String(uw));
+  jambTop.setAttribute("width", String(uw + LEG_EXTENSION));
   jambTop.setAttribute("height", String(JAMB_MARGIN));
 
-  jambBottom.setAttribute("x", String(ux));
+  jambBottom.setAttribute("x", String(ux - LEG_EXTENSION));
   jambBottom.setAttribute("y", String(sy + ASSEMBLY_SASH_HEIGHT));
-  jambBottom.setAttribute("width", String(uw));
+  jambBottom.setAttribute("width", String(uw + LEG_EXTENSION));
   jambBottom.setAttribute("height", String(JAMB_MARGIN));
 
   jambLeft.setAttribute("x", String(ux));
@@ -694,12 +697,40 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
   applyPatternFill(daylight, "pat_glass");
 
   // Boundary strokes
-  applyBoundaryStroke(unitBoundary);
+  if (IS_DOORLIKE && LEG_EXTENSION > 0) {
+    // Replace unit boundary rect with 3 lines (omit left edge pre-rotation = bottom post-rotation)
+    // so the boundary doesn't intersect the extended jamb legs.
+    hideEl(unitBoundary);
+    var svgNsBound = "http://www.w3.org/2000/svg";
+    var boundaryLines = [
+      // Top edge (pre-rot): ux,uy -> ux+uw,uy (becomes right edge post-rotation)
+      { x1: ux, y1: uy, x2: ux + uw, y2: uy },
+      // Right edge (pre-rot): ux+uw,uy -> ux+uw,uy+uh (becomes top edge post-rotation)
+      { x1: ux + uw, y1: uy, x2: ux + uw, y2: uy + uh },
+      // Bottom edge (pre-rot): ux,uy+uh -> ux+uw,uy+uh (becomes left edge post-rotation)
+      { x1: ux, y1: uy + uh, x2: ux + uw, y2: uy + uh },
+    ];
+    for (var bli = 0; bli < boundaryLines.length; bli++) {
+      var bl = boundaryLines[bli];
+      var bLine = doc.createElementNS(svgNsBound, "line");
+      bLine.setAttribute("x1", String(bl.x1));
+      bLine.setAttribute("y1", String(bl.y1));
+      bLine.setAttribute("x2", String(bl.x2));
+      bLine.setAttribute("y2", String(bl.y2));
+      bLine.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
+      bLine.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
+      bLine.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+      bLine.setAttribute("vector-effect", "non-scaling-stroke");
+      renderRootEl.appendChild(bLine);
+    }
+  } else {
+    applyBoundaryStroke(unitBoundary);
+  }
   if (IS_CO) suppressStroke(sashBoundary);
   else applyBoundaryStroke(sashBoundary);
 
   // Keep boundaries on top
-  bringToFront(unitBoundary);
+  if (!IS_DOORLIKE || LEG_EXTENSION === 0) bringToFront(unitBoundary);
   bringToFront(sashBoundary);
 
   // ---- Door bore circles (single door only) ----

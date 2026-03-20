@@ -645,10 +645,19 @@ function build_assembly_svg(index, muntins, mountTarget) {
     var leftM = Math.max(dimMargins.leftMargin, blockDimMargins.leftMargin);
     var rightM = Math.max(dimMargins.rightMargin, blockDimMargins.rightMargin);
     var bottomM = blockDimMargins.bottomMargin || 0;
+
+    // Account for doorlike jamb leg extension (0.25" protrusion past block boundary)
+    var hasAnyDoorlike = Array.isArray(solution.build_objects) && solution.build_objects.some(function (bo) {
+      var c = String(bo && bo.construction || "").trim();
+      return c === "door" || c === "single_door" || c === "single_door_only" || c === "single"
+          || c === "double_door" || c === "co" || c === "cased_opening";
+    });
+    var legPad = hasAnyDoorlike ? 0.25 * 96 : 0;
+
     var vbX = bounds.minX - leftM;
     var vbY = bounds.minY - topM;
     var vbW = bounds.w + leftM + rightM;
-    var vbH = bounds.h + topM + bottomM;
+    var vbH = bounds.h + topM + bottomM + legPad;
     root.setAttribute("viewBox", vbX + " " + vbY + " " + vbW + " " + vbH);
 
     // ✅ CONSTRAIN TO WRAPPER DIV
