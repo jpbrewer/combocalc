@@ -83,14 +83,21 @@
 
 (function () {
 
-  const BASE =
-  "https://localhost:3000/";
-  //"https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@main/";
+  const isLocal = window.location.hostname === "test-site-combo-units.webflow.io";
+
+  const BASE = isLocal
+    ? "https://localhost:3000/"
+    : "https://cdn.jsdelivr.net/gh/jpbrewer/combocalc@main/";
 
   // Asset base URLs — consumed by downstream modules for tile patterns and icons.
-  // Update these when moving assets to a production web server.
-  window.TILE_BASE_URL = "https://localhost:3001/assets/tiles/";
-  window.ICON_BASE_URL = "https://localhost:3001/assets/icons/";
+  window.TILE_BASE_URL = isLocal
+    ? "https://localhost:3001/assets/tiles/"
+    : "https://raw.githubusercontent.com/jpbrewer/comboconfig/main/public/assets/tiles/";
+
+  window.ICON_BASE_URL = isLocal
+    ? "https://localhost:3001/assets/icons/"
+    : "https://raw.githubusercontent.com/jpbrewer/comboconfig/main/public/assets/icons/";
+
   window.CONFIGURATOR_BASE_URL = "https://localhost:3001/combo/";
 
   /**
