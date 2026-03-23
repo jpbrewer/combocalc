@@ -371,6 +371,18 @@ function suppressStroke(el) {
   removeStyleProps(el, ["stroke", "stroke-width", "stroke-opacity", "vector-effect"]);
 }
 
+// Line-drawing mode: stroke-only, no fills. Matches bore circle style (1px, 50% opacity).
+function applyLineStroke(el) {
+  if (!el) return;
+  showEl(el);
+  el.setAttribute("fill", "none");
+  el.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
+  el.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
+  el.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+  el.setAttribute("vector-effect", "non-scaling-stroke");
+  removeStyleProps(el, ["display", "fill", "fill-opacity", "stroke", "stroke-width", "stroke-opacity", "vector-effect"]);
+}
+
 function bringToFront(el) {
   if (!el || !el.parentNode) return;
   el.parentNode.appendChild(el);
@@ -487,6 +499,8 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
   if (!window.WINDOW_TYPE_A_SVG_TEXT || typeof window.WINDOW_TYPE_A_SVG_TEXT !== "string") {
     throw new Error("window.WINDOW_TYPE_A_SVG_TEXT is missing or not a string.");
   }
+
+  const LINE_DRAWING = !!window.showLineDrawing;
 
   const doc = new DOMParser().parseFromString(window.WINDOW_TYPE_A_SVG_TEXT, "image/svg+xml");
   const svgEl = doc.documentElement;
@@ -675,39 +689,55 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
   if (IS_DOORLIKE) hideEl(jambLeft);
   INCLUDE_JAMB ? showEl(unitGroup) : hideEl(unitGroup);
 
-  // ---- Patterns: defs patterns with CDN URLs ----
-  addExternalPngPattern(doc, "pat_rail_wood", patternUrls.rail, PATTERN_TILE.rail);
-  addExternalPngPattern(doc, "pat_stile_wood", patternUrls.stile, PATTERN_TILE.stile);
-  addExternalPngPattern(doc, "pat_bevel_top", patternUrls.bevelTop, PATTERN_TILE.bevelTop);
-  addExternalPngPattern(doc, "pat_bevel_bottom", patternUrls.bevelBottom, PATTERN_TILE.bevelBottom);
-  addExternalPngPattern(doc, "pat_bevel_side", patternUrls.bevelSide, PATTERN_TILE.bevelSide);
-  addExternalPngPattern(doc, "pat_glass", patternUrls.glass, PATTERN_TILE.glass);
+  // ---- Patterns / fills ----
+  if (!LINE_DRAWING) {
+    addExternalPngPattern(doc, "pat_rail_wood", patternUrls.rail, PATTERN_TILE.rail);
+    addExternalPngPattern(doc, "pat_stile_wood", patternUrls.stile, PATTERN_TILE.stile);
+    addExternalPngPattern(doc, "pat_bevel_top", patternUrls.bevelTop, PATTERN_TILE.bevelTop);
+    addExternalPngPattern(doc, "pat_bevel_bottom", patternUrls.bevelBottom, PATTERN_TILE.bevelBottom);
+    addExternalPngPattern(doc, "pat_bevel_side", patternUrls.bevelSide, PATTERN_TILE.bevelSide);
+    addExternalPngPattern(doc, "pat_glass", patternUrls.glass, PATTERN_TILE.glass);
 
-  // Apply fills to base parts (leaf 1)
-  applyPatternFill(jambTop, "pat_rail_wood");
-  applyPatternFill(jambBottom, "pat_rail_wood");
-  applyPatternFill(railTop, "pat_rail_wood");
-  applyPatternFill(railBottom, "pat_rail_wood");
+    applyPatternFill(jambTop, "pat_rail_wood");
+    applyPatternFill(jambBottom, "pat_rail_wood");
+    applyPatternFill(railTop, "pat_rail_wood");
+    applyPatternFill(railBottom, "pat_rail_wood");
 
-  applyPatternFill(jambRight, "pat_stile_wood");
-  applyPatternFill(jambLeft, "pat_stile_wood");
-  applyPatternFill(stileLeft, "pat_stile_wood");
-  applyPatternFill(stileRight, "pat_stile_wood");
+    applyPatternFill(jambRight, "pat_stile_wood");
+    applyPatternFill(jambLeft, "pat_stile_wood");
+    applyPatternFill(stileLeft, "pat_stile_wood");
+    applyPatternFill(stileRight, "pat_stile_wood");
 
-  applyPatternFill(daylight, "pat_glass");
+    applyPatternFill(daylight, "pat_glass");
+  } else {
+    // Line-drawing mode: medium strokes on wood, empty daylight
+    applyLineStroke(jambTop);
+    applyLineStroke(jambBottom);
+    applyLineStroke(railTop);
+    applyLineStroke(railBottom);
+    applyLineStroke(jambRight);
+    applyLineStroke(jambLeft);
+    applyLineStroke(stileLeft);  stileLeft.setAttribute("stroke", "#999999");  stileLeft.setAttribute("stroke-opacity", "0.25");
+    applyLineStroke(stileRight); stileRight.setAttribute("stroke", "#999999"); stileRight.setAttribute("stroke-opacity", "0.25");
+    // Light gray shading for glass at ~25% of normal boundary opacity
+    if (daylight) {
+      showEl(daylight);
+      daylight.setAttribute("fill", "#CCCCCC");
+      daylight.setAttribute("fill-opacity", "0.125");
+      daylight.setAttribute("stroke", "none");
+      removeStyleProps(daylight, ["fill", "fill-opacity", "stroke"]);
+    }
+  }
 
   // Boundary strokes
   if (IS_DOORLIKE && LEG_EXTENSION > 0) {
-    // Replace unit boundary rect with 3 lines (omit left edge pre-rotation = bottom post-rotation)
-    // so the boundary doesn't intersect the extended jamb legs.
     hideEl(unitBoundary);
     var svgNsBound = "http://www.w3.org/2000/svg";
+    var boundaryStrokeW = BOUNDARY_STROKE_PX;
+    var boundaryStrokeOp = BOUNDARY_STROKE_OPACITY;
     var boundaryLines = [
-      // Top edge (pre-rot): ux,uy -> ux+uw,uy (becomes right edge post-rotation)
       { x1: ux, y1: uy, x2: ux + uw, y2: uy },
-      // Right edge (pre-rot): ux+uw,uy -> ux+uw,uy+uh (becomes top edge post-rotation)
       { x1: ux + uw, y1: uy, x2: ux + uw, y2: uy + uh },
-      // Bottom edge (pre-rot): ux,uy+uh -> ux+uw,uy+uh (becomes left edge post-rotation)
       { x1: ux, y1: uy + uh, x2: ux + uw, y2: uy + uh },
     ];
     for (var bli = 0; bli < boundaryLines.length; bli++) {
@@ -718,15 +748,17 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
       bLine.setAttribute("x2", String(bl.x2));
       bLine.setAttribute("y2", String(bl.y2));
       bLine.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
-      bLine.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
-      bLine.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
+      bLine.setAttribute("stroke-width", String(boundaryStrokeW));
+      bLine.setAttribute("stroke-opacity", String(boundaryStrokeOp));
       bLine.setAttribute("vector-effect", "non-scaling-stroke");
       renderRootEl.appendChild(bLine);
     }
   } else {
-    applyBoundaryStroke(unitBoundary);
+    if (LINE_DRAWING) applyLineStroke(unitBoundary);
+    else applyBoundaryStroke(unitBoundary);
   }
   if (IS_CO) suppressStroke(sashBoundary);
+  else if (LINE_DRAWING) applyLineStroke(sashBoundary);
   else applyBoundaryStroke(sashBoundary);
 
   // Keep boundaries on top
@@ -760,7 +792,7 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
     boreRightCircle.setAttribute("cx", String(boreCx));
     boreRightCircle.setAttribute("cy", String(boreRightCy));
     boreRightCircle.setAttribute("r", String(BORE_RADIUS));
-    boreRightCircle.setAttribute("fill", "white");
+    boreRightCircle.setAttribute("fill", LINE_DRAWING ? "none" : "white");
     boreRightCircle.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
     boreRightCircle.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
     boreRightCircle.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
@@ -774,7 +806,7 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
     boreLeftCircle.setAttribute("cx", String(boreCx));
     boreLeftCircle.setAttribute("cy", String(boreLeftCy));
     boreLeftCircle.setAttribute("r", String(BORE_RADIUS));
-    boreLeftCircle.setAttribute("fill", "white");
+    boreLeftCircle.setAttribute("fill", LINE_DRAWING ? "none" : "white");
     boreLeftCircle.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
     boreLeftCircle.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
     boreLeftCircle.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
@@ -809,7 +841,7 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
     boreSlabLeftCircle.setAttribute("cx", String(dboreCx));
     boreSlabLeftCircle.setAttribute("cy", String(dboreLeftCy));
     boreSlabLeftCircle.setAttribute("r", String(BORE_RADIUS_DBL));
-    boreSlabLeftCircle.setAttribute("fill", "white");
+    boreSlabLeftCircle.setAttribute("fill", LINE_DRAWING ? "none" : "white");
     boreSlabLeftCircle.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
     boreSlabLeftCircle.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
     boreSlabLeftCircle.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
@@ -826,7 +858,7 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
     boreSlabRightCircle.setAttribute("cx", String(dboreCx));
     boreSlabRightCircle.setAttribute("cy", String(dboreRightCy));
     boreSlabRightCircle.setAttribute("r", String(BORE_RADIUS_DBL));
-    boreSlabRightCircle.setAttribute("fill", "white");
+    boreSlabRightCircle.setAttribute("fill", LINE_DRAWING ? "none" : "white");
     boreSlabRightCircle.setAttribute("stroke", BOUNDARY_STROKE_COLOR);
     boreSlabRightCircle.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX));
     boreSlabRightCircle.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY));
@@ -849,7 +881,21 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
       (38 / 80) * LEAF_WIDTH,   // 38/80 of door height from bottom
       (69 / 80) * LEAF_WIDTH    // 69/80 of door height from bottom
     ];
-    var hingeFill = hardwareHex || "#D7D7D7";
+    var hingeFill;
+    if (LINE_DRAWING) {
+      // Map hardware colors to grayscale for B&W printing
+      var LINE_GRAY_MAP = {
+        "#D7D7D7": "#D0D0D0", // Chrome → light gray
+        "#B8B8B3": "#B0B0B0", // Satin Nickel → medium-light gray
+        "#D4AF37": "#A0A0A0", // Bright Brass → medium gray
+        "#C9A227": "#909090", // Satin Brass → medium-dark gray
+        "#4A3B2A": "#606060"  // Oil-Rubbed Bronze → dark gray
+      };
+      var hwKey = (hardwareHex || "#D7D7D7").toUpperCase();
+      hingeFill = LINE_GRAY_MAP[hwKey] || "#D0D0D0";
+    } else {
+      hingeFill = hardwareHex || "#D7D7D7";
+    }
 
     // Helper: create a group of 3 hinge rects for one stile side
     function createHingeGroup(attrName, attrValue, hingeX, hingeY) {
@@ -995,12 +1041,20 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
     const stileRight2 = cloneAndTranslate(stileRight, "stile_right_leaf2", yOff);
     const sashBoundary2 = cloneAndTranslate(sashBoundary, "outside_boundary_sash_leaf2", yOff);
 
-    applyPatternFill(railTop2, "pat_rail_wood");
-    applyPatternFill(railBottom2, "pat_rail_wood");
-    applyPatternFill(stileLeft2, "pat_stile_wood");
-    applyPatternFill(stileRight2, "pat_stile_wood");
+    if (!LINE_DRAWING) {
+      applyPatternFill(railTop2, "pat_rail_wood");
+      applyPatternFill(railBottom2, "pat_rail_wood");
+      applyPatternFill(stileLeft2, "pat_stile_wood");
+      applyPatternFill(stileRight2, "pat_stile_wood");
+    } else {
+      applyLineStroke(railTop2);
+      applyLineStroke(railBottom2);
+      applyLineStroke(stileLeft2);  stileLeft2.setAttribute("stroke", "#999999");  stileLeft2.setAttribute("stroke-opacity", "0.25");
+      applyLineStroke(stileRight2); stileRight2.setAttribute("stroke", "#999999"); stileRight2.setAttribute("stroke-opacity", "0.25");
+    }
 
-    applyBoundaryStroke(sashBoundary2);
+    if (LINE_DRAWING) applyLineStroke(sashBoundary2);
+    else applyBoundaryStroke(sashBoundary2);
     bringToFront(sashBoundary2);
 
     sashGroup.appendChild(railTop2);
@@ -1014,7 +1068,14 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
     glass2.setAttribute("y", String(dy0 + yOff));
     glass2.setAttribute("width", String(dw0));
     glass2.setAttribute("height", String(dh0));
-    applyPatternFill(glass2, "pat_glass");
+    if (!LINE_DRAWING) applyPatternFill(glass2, "pat_glass");
+    else {
+      showEl(glass2);
+      glass2.setAttribute("fill", "#CCCCCC");
+      glass2.setAttribute("fill-opacity", "0.125");
+      glass2.setAttribute("stroke", "none");
+      removeStyleProps(glass2, ["fill", "fill-opacity", "stroke"]);
+    }
     glassAreaEl.appendChild(glass2);
   }
 
@@ -1059,22 +1120,26 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
           const pTop = doc.createElementNS(svgNS, "path");
           pTop.setAttribute("id", `bevel_top_${id}`);
           pTop.setAttribute("d", b.top);
-          pTop.setAttribute("fill", "url(#pat_bevel_top)");
+          pTop.setAttribute("fill", LINE_DRAWING ? "white" : "url(#pat_bevel_top)");
+          if (LINE_DRAWING) { pTop.setAttribute("stroke", BOUNDARY_STROKE_COLOR); pTop.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX)); pTop.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY)); pTop.setAttribute("stroke-linejoin", "round"); pTop.setAttribute("vector-effect", "non-scaling-stroke"); }
 
           const pRight = doc.createElementNS(svgNS, "path");
           pRight.setAttribute("id", `bevel_right_${id}`);
           pRight.setAttribute("d", b.right);
-          pRight.setAttribute("fill", "url(#pat_bevel_side)");
+          pRight.setAttribute("fill", LINE_DRAWING ? "white" : "url(#pat_bevel_side)");
+          if (LINE_DRAWING) { pRight.setAttribute("stroke", BOUNDARY_STROKE_COLOR); pRight.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX)); pRight.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY)); pRight.setAttribute("stroke-linejoin", "round"); pRight.setAttribute("vector-effect", "non-scaling-stroke"); }
 
           const pBottom = doc.createElementNS(svgNS, "path");
           pBottom.setAttribute("id", `bevel_bottom_${id}`);
           pBottom.setAttribute("d", b.bottom);
-          pBottom.setAttribute("fill", "url(#pat_bevel_bottom)");
+          pBottom.setAttribute("fill", LINE_DRAWING ? "white" : "url(#pat_bevel_bottom)");
+          if (LINE_DRAWING) { pBottom.setAttribute("stroke", BOUNDARY_STROKE_COLOR); pBottom.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX)); pBottom.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY)); pBottom.setAttribute("stroke-linejoin", "round"); pBottom.setAttribute("vector-effect", "non-scaling-stroke"); }
 
           const pLeft = doc.createElementNS(svgNS, "path");
           pLeft.setAttribute("id", `bevel_left_${id}`);
           pLeft.setAttribute("d", b.left);
-          pLeft.setAttribute("fill", "url(#pat_bevel_side)");
+          pLeft.setAttribute("fill", LINE_DRAWING ? "white" : "url(#pat_bevel_side)");
+          if (LINE_DRAWING) { pLeft.setAttribute("stroke", BOUNDARY_STROKE_COLOR); pLeft.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX)); pLeft.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY)); pLeft.setAttribute("stroke-linejoin", "round"); pLeft.setAttribute("vector-effect", "non-scaling-stroke"); }
 
           bevelsG.appendChild(pTop);
           bevelsG.appendChild(pRight);
@@ -1090,7 +1155,8 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
         v.setAttribute("y", String(dy));
         v.setAttribute("width", String(vT));
         v.setAttribute("height", String(dh));
-        v.setAttribute("fill", "url(#pat_stile_wood)");
+        if (LINE_DRAWING) { v.setAttribute("fill", "none"); v.setAttribute("stroke", "#999999"); v.setAttribute("stroke-width", "0.25"); v.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY * 0.5)); v.setAttribute("vector-effect", "non-scaling-stroke"); }
+        else v.setAttribute("fill", "url(#pat_stile_wood)");
         muntinsG.appendChild(v);
       }
 
@@ -1103,7 +1169,8 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
           h.setAttribute("y", String(y));
           h.setAttribute("width", String(liteW));
           h.setAttribute("height", String(hT));
-          h.setAttribute("fill", "url(#pat_rail_wood)");
+          if (LINE_DRAWING) { h.setAttribute("fill", "none"); h.setAttribute("stroke", "#999999"); h.setAttribute("stroke-width", "0.25"); h.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY * 0.5)); h.setAttribute("vector-effect", "non-scaling-stroke"); }
+          else h.setAttribute("fill", "url(#pat_rail_wood)");
           muntinsG.appendChild(h);
         }
       }
@@ -1131,22 +1198,26 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
         const sTop = doc.createElementNS(svgNS, "path");
         sTop.setAttribute("id", `stop_top_${id}`);
         sTop.setAttribute("d", s.top);
-        sTop.setAttribute("fill", "url(#pat_bevel_top)");
+        sTop.setAttribute("fill", LINE_DRAWING ? "white" : "url(#pat_bevel_top)");
+        if (LINE_DRAWING) { sTop.setAttribute("stroke", BOUNDARY_STROKE_COLOR); sTop.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX)); sTop.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY)); sTop.setAttribute("stroke-linejoin", "round"); sTop.setAttribute("vector-effect", "non-scaling-stroke"); }
 
         const sRight = doc.createElementNS(svgNS, "path");
         sRight.setAttribute("id", `stop_right_${id}`);
         sRight.setAttribute("d", s.right);
-        sRight.setAttribute("fill", "url(#pat_bevel_side)");
+        sRight.setAttribute("fill", LINE_DRAWING ? "white" : "url(#pat_bevel_side)");
+        if (LINE_DRAWING) { sRight.setAttribute("stroke", BOUNDARY_STROKE_COLOR); sRight.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX)); sRight.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY)); sRight.setAttribute("stroke-linejoin", "round"); sRight.setAttribute("vector-effect", "non-scaling-stroke"); }
 
         const sBottom = doc.createElementNS(svgNS, "path");
         sBottom.setAttribute("id", `stop_bottom_${id}`);
         sBottom.setAttribute("d", s.bottom);
-        sBottom.setAttribute("fill", "url(#pat_bevel_bottom)");
+        sBottom.setAttribute("fill", LINE_DRAWING ? "white" : "url(#pat_bevel_bottom)");
+        if (LINE_DRAWING) { sBottom.setAttribute("stroke", BOUNDARY_STROKE_COLOR); sBottom.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX)); sBottom.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY)); sBottom.setAttribute("stroke-linejoin", "round"); sBottom.setAttribute("vector-effect", "non-scaling-stroke"); }
 
         const sLeft = doc.createElementNS(svgNS, "path");
         sLeft.setAttribute("id", `stop_left_${id}`);
         sLeft.setAttribute("d", s.left);
-        sLeft.setAttribute("fill", "url(#pat_bevel_side)");
+        sLeft.setAttribute("fill", LINE_DRAWING ? "white" : "url(#pat_bevel_side)");
+        if (LINE_DRAWING) { sLeft.setAttribute("stroke", BOUNDARY_STROKE_COLOR); sLeft.setAttribute("stroke-width", String(BOUNDARY_STROKE_PX)); sLeft.setAttribute("stroke-opacity", String(BOUNDARY_STROKE_OPACITY)); sLeft.setAttribute("stroke-linejoin", "round"); sLeft.setAttribute("vector-effect", "non-scaling-stroke"); }
 
         stopsG.appendChild(sTop);
         stopsG.appendChild(sRight);
@@ -1209,7 +1280,7 @@ window.build_block_svgs = function build_block_svgs(index, muntins) {
         var bhdSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + bhdW + ' ' + bhdH + '"'
           + ' width="' + (bhdW * DISPLAY_SCALE) + '" height="' + (bhdH * DISPLAY_SCALE) + '">'
           + '<rect x="0" y="0" width="' + bhdW + '" height="' + bhdH + '"'
-          + ' fill="white" stroke="#333333" stroke-width="2" vector-effect="non-scaling-stroke"/>'
+          + ' fill="' + (LINE_DRAWING ? 'none' : 'white') + '" stroke="#000000" stroke-width="2" vector-effect="non-scaling-stroke"/>'
           + '</svg>';
         betaSolution.building_block_svgs[betaPos] = bhdSvg;
         continue;
@@ -1279,7 +1350,7 @@ window.build_block_svgs = function build_block_svgs(index, muntins) {
       var hdSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + hdW + ' ' + hdH + '"'
         + ' width="' + (hdW * DISPLAY_SCALE) + '" height="' + (hdH * DISPLAY_SCALE) + '">'
         + '<rect x="0" y="0" width="' + hdW + '" height="' + hdH + '"'
-        + ' fill="white" stroke="#333333" stroke-width="2" vector-effect="non-scaling-stroke"/>'
+        + ' fill="' + (LINE_DRAWING ? 'none' : 'white') + '" stroke="#000000" stroke-width="2" vector-effect="non-scaling-stroke"/>'
         + '</svg>';
       solution[cacheKey][pos] = hdSvg;
       continue;

@@ -475,6 +475,147 @@ window.ASSEMBLY_TEMPLATES = [
       { "op": "snap", "pos": "pos5", "my": "BL", "toPos": "pos2", "their": "TL" },
       { "op": "validateSnap", "pos": "pos5", "my": "BR", "toPos": "pos2", "their": "TR", "tolerance": 2.00 }
     ]
+  },
+  {
+    "template": "Z",
+    "description": "Z: pos2 only.",
+    "operating_door": "left_hand",
+    "positions": ["pos2"],
+    "ops": [
+      { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
+    ]
+  },
+  {
+    "template": "H",
+    "description": "H: pos2 main unit with pos4 and pos6 above (split transom).",
+    "operating_door": "none",
+    "positions": ["pos2", "pos4", "pos6"],
+    "ops": [
+      { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
+      { "op": "snap", "pos": "pos4", "my": "BL", "toPos": "pos2", "their": "TL" },
+      { "op": "snap", "pos": "pos6", "my": "BR", "toPos": "pos2", "their": "TR" },
+      { "op": "validateSnap", "pos": "pos4", "my": "BR", "toPos": "pos6", "their": "BL", "tolerance": 2.0 }
+    ]
+  },
+
+  {
+    "template": "HHD",
+    "description": "HHD: pos2 with pos4 and pos6 above, and pos7 spanning across the top.",
+    "operating_door": "none",
+    "positions": ["pos2", "pos4", "pos6", "pos7"],
+    "ops": [
+      { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
+      { "op": "snap", "pos": "pos4", "my": "BL", "toPos": "pos2", "their": "TL" },
+      { "op": "snap", "pos": "pos6", "my": "BR", "toPos": "pos2", "their": "TR" },
+      { "op": "validateSnap", "pos": "pos4", "my": "BR", "toPos": "pos6", "their": "BL", "tolerance": 2.0 },
+
+      { "op": "snap", "pos": "pos7", "my": "BL", "toPos": "pos4", "their": "TL" },
+      { "op": "validateSnap", "pos": "pos7", "my": "BR", "toPos": "pos6", "their": "TR", "tolerance": 2.0 }
+    ]
+  },
+
+  {
+    "template": "I",
+    "description": "I: pos2 main unit with pos4, pos5, pos6 above (three-piece transom).",
+    "operating_door": "none",
+    "positions": ["pos2", "pos4", "pos5", "pos6"],
+    "ops": [
+      { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
+
+      { "op": "snap", "pos": "pos4", "my": "BL", "toPos": "pos2", "their": "TL" },
+      { "op": "snap", "pos": "pos5", "my": "BL", "toPos": "pos4", "their": "BR" },
+      { "op": "snap", "pos": "pos6", "my": "BR", "toPos": "pos2", "their": "TR" },
+
+    ]
+  },
+
+  {
+    "template": "IHD",
+    "description": "IHD: pos2 with pos4, pos5, pos6 above, and pos7 spanning across the top.",
+    "operating_door": "none",
+    "positions": ["pos2", "pos4", "pos5", "pos6", "pos7"],
+    "ops": [
+      { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
+
+      { "op": "snap", "pos": "pos4", "my": "BL", "toPos": "pos2", "their": "TL" },
+      { "op": "snap", "pos": "pos5", "my": "BL", "toPos": "pos4", "their": "BR" },
+      { "op": "snap", "pos": "pos6", "my": "BR", "toPos": "pos2", "their": "TR" },
+
+      { "op": "snap", "pos": "pos7", "my": "BL", "toPos": "pos4", "their": "TL" },
+      { "op": "validateSnap", "pos": "pos7", "my": "BR", "toPos": "pos6", "their": "TR", "tolerance": 2.0 }
+    ]
+  },
+
+  {
+    "template": "J",
+    "description": "J: pos1 left, pos2 center, pos3 right, with pos4 and pos6 above (split transom over sidelites).",
+    "operating_door": "none",
+    "positions": ["pos1", "pos2", "pos3", "pos4", "pos6"],
+    "ops": [
+      { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
+
+      { "op": "snap", "pos": "pos1", "my": "TR", "toPos": "pos2", "their": "TL" },
+      { "op": "snap", "pos": "pos3", "my": "TL", "toPos": "pos2", "their": "TR" },
+
+      { "op": "snap", "pos": "pos4", "my": "BL", "toPos": "pos1", "their": "TL" },
+      { "op": "snap", "pos": "pos6", "my": "BR", "toPos": "pos3", "their": "TR" }
+    ]
+  },
+
+  {
+    "template": "JHD",
+    "description": "JHD: J with pos7 spanning across top.",
+    "operating_door": "none",
+    "positions": ["pos1", "pos2", "pos3", "pos4", "pos6", "pos7"],
+    "ops": [
+      { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
+
+      { "op": "snap", "pos": "pos1", "my": "TR", "toPos": "pos2", "their": "TL" },
+      { "op": "snap", "pos": "pos3", "my": "TL", "toPos": "pos2", "their": "TR" },
+
+      { "op": "snap", "pos": "pos4", "my": "BL", "toPos": "pos1", "their": "TL" },
+      { "op": "snap", "pos": "pos6", "my": "BR", "toPos": "pos3", "their": "TR" },
+
+      { "op": "snap", "pos": "pos7", "my": "BL", "toPos": "pos4", "their": "TL" },
+      { "op": "validateSnap", "pos": "pos7", "my": "BR", "toPos": "pos6", "their": "TR", "tolerance": 2.0 }
+    ]
+  },
+
+  {
+    "template": "K",
+    "description": "K: pos1 left, pos2 center, pos3 right, with pos4, pos5, pos6 above (three-piece transom).",
+    "operating_door": "none",
+    "positions": ["pos1", "pos2", "pos3", "pos4", "pos5", "pos6"],
+    "ops": [
+      { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
+
+      { "op": "snap", "pos": "pos1", "my": "TR", "toPos": "pos2", "their": "TL" },
+      { "op": "snap", "pos": "pos3", "my": "TL", "toPos": "pos2", "their": "TR" },
+
+      { "op": "snap", "pos": "pos4", "my": "BL", "toPos": "pos1", "their": "TL" },
+      { "op": "snap", "pos": "pos5", "my": "BL", "toPos": "pos4", "their": "BR" },
+      { "op": "snap", "pos": "pos6", "my": "BR", "toPos": "pos3", "their": "TR" }
+    ]
+  },
+
+  {
+    "template": "KHD",
+    "description": "KHD: K with pos7 spanning across the top.",
+    "operating_door": "none",
+    "positions": ["pos1", "pos2", "pos3", "pos4", "pos5", "pos6", "pos7"],
+    "ops": [
+      { "op": "place", "pos": "pos2", "at": { "x": 0, "y": 0 } },
+
+      { "op": "snap", "pos": "pos1", "my": "TR", "toPos": "pos2", "their": "TL" },
+      { "op": "snap", "pos": "pos3", "my": "TL", "toPos": "pos2", "their": "TR" },
+
+      { "op": "snap", "pos": "pos4", "my": "BL", "toPos": "pos1", "their": "TL" },
+      { "op": "snap", "pos": "pos5", "my": "BL", "toPos": "pos4", "their": "BR" },
+      { "op": "snap", "pos": "pos6", "my": "BR", "toPos": "pos3", "their": "TR" },
+
+      { "op": "snap", "pos": "pos7", "my": "BL", "toPos": "pos4", "their": "TL" },
+      { "op": "validateSnap", "pos": "pos7", "my": "BR", "toPos": "pos6", "their": "TR", "tolerance": 2.0 }
+    ]
   }
 ];
 

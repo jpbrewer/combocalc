@@ -342,12 +342,24 @@ window.updateHingeVisibility = updateHingeVisibility;
  * @param {string} hexColor - CSS hex color (e.g., "#D7D7D7")
  * @param {HTMLElement} [container] - optional mount container; defaults to last mount target or #explore
  */
+var LINE_GRAY_MAP = {
+  "#D7D7D7": "#D0D0D0", // Chrome → light gray
+  "#B8B8B3": "#B0B0B0", // Satin Nickel → medium-light gray
+  "#D4AF37": "#A0A0A0", // Bright Brass → medium gray
+  "#C9A227": "#909090", // Satin Brass → medium-dark gray
+  "#4A3B2A": "#606060"  // Oil-Rubbed Bronze → dark gray
+};
+
 function updateHingeColor(hexColor, container) {
   var el = container || _resolveMountTarget();
   if (!el) return;
+  var fill = hexColor;
+  if (window.showLineDrawing) {
+    fill = LINE_GRAY_MAP[(hexColor || "").toUpperCase()] || "#D0D0D0";
+  }
   var rects = el.querySelectorAll('[data-hinge] rect, [data-hinge-leaf2] rect, [data-bolt-slab] rect, [data-catch] rect');
   for (var i = 0; i < rects.length; i++) {
-    rects[i].setAttribute("fill", hexColor);
+    rects[i].setAttribute("fill", fill);
   }
 }
 window.updateHingeColor = updateHingeColor;
