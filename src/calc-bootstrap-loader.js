@@ -91,12 +91,12 @@
 
   // Asset base URLs — consumed by downstream modules for tile patterns and icons.
   window.TILE_BASE_URL = isLocal
-    ? "https://localhost:3001/assets/tiles/"
-    : "https://raw.githubusercontent.com/jpbrewer/comboconfig/main/public/assets/tiles/";
+    ? "https://localhost:3001/combo/assets/tiles/"
+    : "https://calc.transomsdirect.com/combo/assets/tiles/";
 
   window.ICON_BASE_URL = isLocal
-    ? "https://localhost:3001/assets/icons/"
-    : "https://raw.githubusercontent.com/jpbrewer/comboconfig/main/public/assets/icons/";
+    ? "https://localhost:3001/combo/assets/icons/"
+    : "https://calc.transomsdirect.com/combo/assets/icons/";
 
   window.CONFIGURATOR_BASE_URL = "https://localhost:3001/combo/";
 

@@ -1280,7 +1280,7 @@ window.build_block_svgs = function build_block_svgs(index, muntins) {
         var bhdSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + bhdW + ' ' + bhdH + '"'
           + ' width="' + (bhdW * DISPLAY_SCALE) + '" height="' + (bhdH * DISPLAY_SCALE) + '">'
           + '<rect x="0" y="0" width="' + bhdW + '" height="' + bhdH + '"'
-          + ' fill="' + (LINE_DRAWING ? 'none' : 'white') + '" stroke="#000000" stroke-width="2" vector-effect="non-scaling-stroke"/>'
+          + ' fill="' + (!!window.showLineDrawing ? 'none' : 'white') + '" stroke="#000000" stroke-width="2" vector-effect="non-scaling-stroke"/>'
           + '</svg>';
         betaSolution.building_block_svgs[betaPos] = bhdSvg;
         continue;
@@ -1350,7 +1350,7 @@ window.build_block_svgs = function build_block_svgs(index, muntins) {
       var hdSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + hdW + ' ' + hdH + '"'
         + ' width="' + (hdW * DISPLAY_SCALE) + '" height="' + (hdH * DISPLAY_SCALE) + '">'
         + '<rect x="0" y="0" width="' + hdW + '" height="' + hdH + '"'
-        + ' fill="' + (LINE_DRAWING ? 'none' : 'white') + '" stroke="#000000" stroke-width="2" vector-effect="non-scaling-stroke"/>'
+        + ' fill="' + (!!window.showLineDrawing ? 'none' : 'white') + '" stroke="#000000" stroke-width="2" vector-effect="non-scaling-stroke"/>'
         + '</svg>';
       solution[cacheKey][pos] = hdSvg;
       continue;
