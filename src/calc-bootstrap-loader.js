@@ -98,7 +98,9 @@
     ? "https://localhost:3001/combo/assets/icons/"
     : "https://calc.transomsdirect.com/combo/assets/icons/";
 
-  window.CONFIGURATOR_BASE_URL = "https://localhost:3001/combo/";
+  window.CONFIGURATOR_BASE_URL = isLocal
+    ? "https://localhost:3001/combo/"
+    : "https://calc.transomsdirect.com/combo/";
 
   /**
    * IMPORTANT:
