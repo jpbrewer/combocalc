@@ -574,8 +574,8 @@ function renderOneBlockToSvgString(block, patternUrls, hardwareHex) {
   const INPUT_WIDTH = toPx(inputWidthIn);
   const INPUT_HEIGHT = toPx(inputHeightIn);
 
-  const INPUT_ROWS = mustIntGte1(block.rows, `(${blockPos}) rows`);
-  const INPUT_COLS = mustIntGte1(block.cols, `(${blockPos}) cols`);
+  const INPUT_ROWS = IS_CO ? 1 : mustIntGte1(block.rows, `(${blockPos}) rows`);
+  const INPUT_COLS = IS_CO ? 1 : mustIntGte1(block.cols, `(${blockPos}) cols`);
 
   const SR_TOP = toPx(mustFinite(block.sr_top, `(${blockPos}) sr_top`));
   const SR_LEFT = toPx(mustFinite(block.sr_left, `(${blockPos}) sr_left`));
